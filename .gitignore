@@ -3,3 +3,4 @@ uefi_lemola_os.efi
 target
 tmp
 mnt
+.vscode

@@ -121,12 +121,12 @@ pub struct EfiBootServices {
 
 #[repr(C)]
 pub struct EfiSimpleTextOutputProtocol {
-    pub reset: extern "efiapi" fn(*mut EfiSimpleTextOutputProtocol, bool) -> EfiStatus,
-    pub output_string: extern "efiapi" fn(*mut EfiSimpleTextOutputProtocol, *const CHAR16) -> EfiStatus,
+    pub reset: extern "efiapi" fn(&Self, bool) -> EfiStatus,
+    pub output_string: extern "efiapi" fn(&Self, *const CHAR16) -> EfiStatus,
     query_mode: FnPtr,
     set_mode: FnPtr,
     set_attribute: FnPtr,
-    pub clear_screen: extern "efiapi" fn(*mut EfiSimpleTextOutputProtocol) -> EfiStatus,
+    pub clear_screen: extern "efiapi" fn(&Self) -> EfiStatus,
     set_cursor_position: FnPtr,
     enable_cursor: FnPtr,
     pub mode: *mut SimpleTextOutputMode,
@@ -145,13 +145,61 @@ pub struct SimpleTextOutputMode {
 
 #[repr(C)]
 pub struct EfiSimpleTextInputProtocol {
-    pub reset: extern "efiapi" fn(*mut EfiSimpleTextInputProtocol, bool) -> EfiStatus,
-    pub read_key_stroke: extern "efiapi" fn(*mut EfiSimpleTextInputProtocol, *mut EfiInputKey) -> EfiStatus,
+    pub reset: extern "efiapi" fn(&Self, bool) -> EfiStatus,
+    pub read_key_stroke: extern "efiapi" fn(&Self, *mut EfiInputKey) -> EfiStatus,
     pub wait_for_key: *mut c_void,
+}
+
+impl EfiSimpleTextOutputProtocol {
+    pub fn output_string(&self, msg: &str) {
+        use heapless::*;
+        use heapless::consts::*;
+        (self.output_string)(self, msg.encode_utf16().collect::<Vec<u16, U128>>().as_ptr());
+    }
 }
 
 #[repr(C)]
 pub struct EfiInputKey {
     pub scan_code: u16,
     pub unicode_char: CHAR16,
+}
+
+use core::cell::Cell;
+use core::fmt::Error;
+
+pub static mut WRITER: Writer = Writer {output_protocol: Cell::new(None)};
+
+pub struct Writer {
+    pub output_protocol: Cell<Option<&'static EfiSimpleTextOutputProtocol>>,
+}
+
+unsafe impl Sync for Writer {}
+
+impl core::fmt::Write for Writer {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        if let Some(output_protcol) = self.output_protocol.get() {
+            output_protcol.output_string(s);
+            return Ok(());
+        }
+        Err(Error)
+    }
+}
+
+#[macro_export]
+macro_rules! print {
+    ($($arg:tt)*) => ($crate::uefi::_print(format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! println {
+    () => ($crate::print!("\n"));
+    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
+
+#[doc(hidden)]
+pub fn _print(args: core::fmt::Arguments) {
+    use core::fmt::Write;
+    unsafe {
+        WRITER.write_fmt(args).unwrap();
+    }
 }
