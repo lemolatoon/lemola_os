@@ -127,11 +127,11 @@ struct EfiBootServices {
 #[repr(C)]
 struct EfiSimpleTextOutputProtocol {
     reset: extern "efiapi" fn(*mut EfiSimpleTextOutputProtocol, bool) -> EfiStatus,
-    output_string: extern "efiapi" fn(*mut EfiSimpleTextOutputProtocol, *const CHAR16),
+    output_string: extern "efiapi" fn(*mut EfiSimpleTextOutputProtocol, *const CHAR16) -> EfiStatus,
     query_mode: FnPtr,
     set_mode: FnPtr,
     set_attribute: FnPtr,
-    clear_screen: FnPtr,
+    clear_screen: extern "efiapi" fn(*mut EfiSimpleTextOutputProtocol) -> EfiStatus,
     set_cursor_position: FnPtr,
     enable_cursor: FnPtr,
     mode: *mut SimpleTextOutputMode,
@@ -164,9 +164,10 @@ struct EfiInputKey {
 
 use utf16_literal::utf16;
 #[no_mangle]
-pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: *mut  EfiSystemTable) {
+pub extern "C" fn efi_main(_image_handle: EfiHandle, system_table: *mut  EfiSystemTable) {
     unsafe {
         let output_protocol = (*system_table).con_out;
+        ((*output_protocol).reset)(output_protocol, true);
         ((*output_protocol).output_string)(output_protocol, utf16!("Hello World from Rust!\n").as_ptr());
     }
     loop {}
