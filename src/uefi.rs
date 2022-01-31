@@ -1,4 +1,8 @@
 use core::ffi::c_void;
+use core::ptr::addr_of;
+
+use crate::{print, uefi_utils::MemoryMap};
+use crate:: uefi_utils::MemoryType;
 
 type CHAR16 = u16;
 pub type EfiStatus = usize;
@@ -75,7 +79,7 @@ pub struct EfiBootServices {
     // Memory Services
     allocate_pages: FnPtr,
     free_pages: FnPtr,
-    get_memory_map: FnPtr,
+    pub get_memory_map: extern "efiapi" fn(memory_map_size: &mut usize, memory_map: *mut EfiMemoryDescriptor, map_key: &mut usize, descriptor_size: &mut usize, descriptor_version: &mut u32) -> EfiStatus,
     allocate_pool: FnPtr,
     free_pool: FnPtr,
     // Event & Timer Services
@@ -120,15 +124,33 @@ pub struct EfiBootServices {
 }
 
 #[repr(C)]
+#[derive(Debug)]
+pub struct EfiMemoryDescriptor {
+    pub type_: u32,
+    pub physical_start: u64,
+    pub virtual_start: u64,
+    pub number_of_pages: u64,
+    pub attribute: u64,
+}
+
+impl core::fmt::Display for EfiMemoryDescriptor {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        use core::ptr;
+        f.write_fmt(format_args!("{{ addr: [ {:#8x} - {:#8x} ], memory_type: {:?} }}", self.physical_start, self.physical_start + self.number_of_pages * 4 * 1024, MemoryType::try_from(self.type_)?))?;
+        Ok(())
+    }
+}
+
+#[repr(C)]
 pub struct EfiSimpleTextOutputProtocol {
     pub reset: extern "efiapi" fn(&Self, bool) -> EfiStatus,
     pub output_string: extern "efiapi" fn(&Self, *const CHAR16) -> EfiStatus,
-    query_mode: FnPtr,
+    query_mode: extern "efiapi" fn(&Self, usize, *mut usize, *mut usize) -> EfiStatus,
     set_mode: FnPtr,
     set_attribute: FnPtr,
     pub clear_screen: extern "efiapi" fn(&Self) -> EfiStatus,
-    set_cursor_position: FnPtr,
-    enable_cursor: FnPtr,
+    pub set_cursor_position: extern "efiapi" fn(&Self, usize, usize) -> EfiStatus,
+    enable_cursor: extern "efiapi" fn(&Self, bool) -> EfiStatus,
     pub mode: *mut SimpleTextOutputMode,
 }
 
@@ -150,11 +172,40 @@ pub struct EfiSimpleTextInputProtocol {
     pub wait_for_key: *mut c_void,
 }
 
+impl EfiBootServices {
+    pub fn get_memory_map(&self, memmap_buf: &[u8] ,map: &mut MemoryMap) -> Result<EfiStatus, &str> {
+        if memmap_buf.len() == 0 {
+            return Err("TOO SMALL BUFFER SIZE");
+        } 
+        map.memory_map_size = core::mem::size_of_val(memmap_buf);
+        let status;
+        status = (&self.get_memory_map)(&mut map.memory_map_size, map.memory_map, &mut map.map_key, &mut map.descriptor_size, &mut map.descriptor_version);
+        Ok(status)
+    }
+}
+
 impl EfiSimpleTextOutputProtocol {
     pub fn output_string(&self, msg: &str) {
         use heapless::*;
         use heapless::consts::*;
+        // (self.output_string)(self, msg.chars().map(|c| if c != 'n' { c.encode_utf16(c) }).collect::<Vec<u16, U1000>>())
         (self.output_string)(self, msg.encode_utf16().collect::<Vec<u16, U128>>().as_ptr());
+        // (self.output_string)(self, "\n".encode_utf16().collect::<Vec<u16, U128>>().as_ptr());
+    }
+
+    pub fn enable_cursor(&self, b: bool) {
+        (self.enable_cursor)(self, b);
+    }
+
+    pub fn change_column(&self) {
+        let column;
+        let row;
+        unsafe {
+            column = (*(self.mode)).cursor_column;
+            row = (*(self.mode)).cursor_row;
+            print!("column: {}, row: {}", column, row);
+        }
+        // (self.set_cursor_position)(self, column + 1, row);
     }
 }
 
@@ -162,44 +213,4 @@ impl EfiSimpleTextOutputProtocol {
 pub struct EfiInputKey {
     pub scan_code: u16,
     pub unicode_char: CHAR16,
-}
-
-use core::cell::Cell;
-use core::fmt::Error;
-
-pub static mut WRITER: Writer = Writer {output_protocol: Cell::new(None)};
-
-pub struct Writer {
-    pub output_protocol: Cell<Option<&'static EfiSimpleTextOutputProtocol>>,
-}
-
-unsafe impl Sync for Writer {}
-
-impl core::fmt::Write for Writer {
-    fn write_str(&mut self, s: &str) -> core::fmt::Result {
-        if let Some(output_protcol) = self.output_protocol.get() {
-            output_protcol.output_string(s);
-            return Ok(());
-        }
-        Err(Error)
-    }
-}
-
-#[macro_export]
-macro_rules! print {
-    ($($arg:tt)*) => ($crate::uefi::_print(format_args!($($arg)*)));
-}
-
-#[macro_export]
-macro_rules! println {
-    () => ($crate::print!("\n"));
-    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
-}
-
-#[doc(hidden)]
-pub fn _print(args: core::fmt::Arguments) {
-    use core::fmt::Write;
-    unsafe {
-        WRITER.write_fmt(args).unwrap();
-    }
 }
