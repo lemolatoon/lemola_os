@@ -1,8 +1,7 @@
 use core::ffi::c_void;
-use core::ptr::addr_of;
 
+use crate::uefi_utils::MemoryType;
 use crate::{print, uefi_utils::MemoryMap};
-use crate:: uefi_utils::MemoryType;
 
 type CHAR16 = u16;
 pub type EfiStatus = usize;
@@ -26,7 +25,7 @@ pub struct EfiSystemTable {
     pub console_in_handle: EfiHandle,
     pub con_in: *mut EfiSimpleTextInputProtocol,
     pub console_out_handle: EfiHandle,
-    pub con_out: *mut EfiSimpleTextOutputProtocol,
+    pub con_out: &'static mut EfiSimpleTextOutputProtocol,
     pub standerd_error_handle: EfiHandle,
     pub std_err: *mut EfiSimpleTextOutputProtocol,
     pub runtime_services: *mut EfiRuntimeServices,
@@ -79,7 +78,13 @@ pub struct EfiBootServices {
     // Memory Services
     allocate_pages: FnPtr,
     free_pages: FnPtr,
-    pub get_memory_map: extern "efiapi" fn(memory_map_size: &mut usize, memory_map: *mut EfiMemoryDescriptor, map_key: &mut usize, descriptor_size: &mut usize, descriptor_version: &mut u32) -> EfiStatus,
+    pub get_memory_map: extern "efiapi" fn(
+        memory_map_size: &mut usize,
+        memory_map: *mut EfiMemoryDescriptor,
+        map_key: &mut usize,
+        descriptor_size: &mut usize,
+        descriptor_version: &mut u32,
+    ) -> EfiStatus,
     allocate_pool: FnPtr,
     free_pool: FnPtr,
     // Event & Timer Services
@@ -135,8 +140,12 @@ pub struct EfiMemoryDescriptor {
 
 impl core::fmt::Display for EfiMemoryDescriptor {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        use core::ptr;
-        f.write_fmt(format_args!("{{ addr: [ {:#8x} - {:#8x} ], memory_type: {:?} }}", self.physical_start, self.physical_start + self.number_of_pages * 4 * 1024, MemoryType::try_from(self.type_)?))?;
+        f.write_fmt(format_args!(
+            "{{ addr: [ {:#010x} - {:#010x} ], memory_type: {:?} }}",
+            self.physical_start,
+            self.physical_start + self.number_of_pages * 4 * 1024,
+            MemoryType::try_from(self.type_)?
+        ))?;
         Ok(())
     }
 }
@@ -173,24 +182,34 @@ pub struct EfiSimpleTextInputProtocol {
 }
 
 impl EfiBootServices {
-    pub fn get_memory_map(&self, memmap_buf: &[u8] ,map: &mut MemoryMap) -> Result<EfiStatus, &str> {
-        if memmap_buf.len() == 0 {
+    pub fn get_memory_map(
+        &self,
+        memmap_buf: &[u8],
+        map: &mut MemoryMap,
+    ) -> Result<EfiStatus, &str> {
+        if memmap_buf.is_empty() {
             return Err("TOO SMALL BUFFER SIZE");
-        } 
+        }
         map.memory_map_size = core::mem::size_of_val(memmap_buf);
-        let status;
-        status = (&self.get_memory_map)(&mut map.memory_map_size, map.memory_map, &mut map.map_key, &mut map.descriptor_size, &mut map.descriptor_version);
+        let status = (&self.get_memory_map)(
+            &mut map.memory_map_size,
+            map.memory_map,
+            &mut map.map_key,
+            &mut map.descriptor_size,
+            &mut map.descriptor_version,
+        );
         Ok(status)
     }
 }
 
 impl EfiSimpleTextOutputProtocol {
     pub fn output_string(&self, msg: &str) {
-        use heapless::*;
         use heapless::consts::*;
-        // (self.output_string)(self, msg.chars().map(|c| if c != 'n' { c.encode_utf16(c) }).collect::<Vec<u16, U1000>>())
-        (self.output_string)(self, msg.encode_utf16().collect::<Vec<u16, U128>>().as_ptr());
-        // (self.output_string)(self, "\n".encode_utf16().collect::<Vec<u16, U128>>().as_ptr());
+        use heapless::*;
+        (self.output_string)(
+            self,
+            msg.encode_utf16().collect::<Vec<u16, U1024>>().as_ptr(),
+        );
     }
 
     pub fn enable_cursor(&self, b: bool) {

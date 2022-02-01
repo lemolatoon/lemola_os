@@ -2,7 +2,9 @@ use crate::uefi::*;
 use core::cell::Cell;
 use core::fmt::Error;
 
-pub static mut WRITER: Writer = Writer {output_protocol: Cell::new(None)};
+pub static mut WRITER: Writer = Writer {
+    output_protocol: Cell::new(None),
+};
 
 pub struct Writer {
     pub output_protocol: Cell<Option<&'static EfiSimpleTextOutputProtocol>>,
@@ -16,7 +18,7 @@ impl core::fmt::Write for Writer {
             // for split_s in s.split('\n') {
             //     output_protcol.output_string(split_s);
             //     output_protcol.change_column();
-            // } 
+            // }
             output_protcol.output_string(s);
             return Ok(());
         }
@@ -53,7 +55,7 @@ pub struct MemoryMap {
     pub descriptor_version: u32,
 }
 
-impl MemoryMap  {
+impl MemoryMap {
     pub fn new(memmap_buf: &mut [u8]) -> Self {
         // let mut memmap_buf = [0u8; 4096 * 4];
         Self {
@@ -92,7 +94,7 @@ impl TryFrom<u32> for MemoryType {
 
     fn try_from(value: u32) -> Result<Self, Self::Error> {
         use crate::uefi_utils::MemoryType::*;
-        let mem_type = match value { 
+        let mem_type = match value {
             0 => EfiReservedMemoryType,
             1 => EfiLoaderCode,
             2 => EfiLoaderData,
