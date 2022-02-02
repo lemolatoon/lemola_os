@@ -4,3 +4,5 @@ target
 tmp
 mnt
 .vscode
+/src/serial.rs
+src/serial.rs

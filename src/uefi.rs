@@ -35,6 +35,12 @@ pub struct EfiSystemTable {
     pub configuration_table: *mut EfiConfigurationTable,
 }
 
+impl EfiSystemTable {
+    pub fn get_boot_services(&self) -> &EfiBootServices {
+        unsafe { self.boot_services.as_ref().unwrap() }
+    }
+}
+
 type EfiGuid = u128;
 
 #[repr(C)]
@@ -228,11 +234,10 @@ impl EfiSimpleTextOutputProtocol {
         let column;
         let row;
         unsafe {
-            column = (*(self.mode)).cursor_column;
-            row = (*(self.mode)).cursor_row;
-            print!("column: {}, row: {}", column, row);
+            column = (*(self.mode)).cursor_column as usize;
+            row = (*(self.mode)).cursor_row as usize;
         }
-        // (self.set_cursor_position)(self, column + 1, row);
+        (self.set_cursor_position)(self, column + 1, row);
     }
 }
 

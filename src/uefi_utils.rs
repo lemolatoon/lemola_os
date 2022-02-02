@@ -33,6 +33,20 @@ macro_rules! println {
     ($($arg:tt)*) => ($crate::print!("{}\r\n", format_args!($($arg)*)));
 }
 
+#[macro_export]
+macro_rules! mem_desc {
+    ($boot_services:expr) => {{
+        const SIZE: usize = 4096 * 4;
+        use core::mem::MaybeUninit;
+        let mut memmap_buf: MaybeUninit<[u8; SIZE]> = MaybeUninit::uninit();
+        let mem_desc_array = $boot_services.get_memory_descriptor_array(
+            memmap_buf.as_mut_ptr(),
+            core::mem::size_of_val(&memmap_buf),
+        );
+        mem_desc_array
+    }};
+}
+
 #[doc(hidden)]
 pub fn _print(args: core::fmt::Arguments) {
     use core::fmt::Write;

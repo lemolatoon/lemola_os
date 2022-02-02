@@ -3,7 +3,8 @@
 #![feature(abi_efiapi)]
 
 use core::panic::PanicInfo;
-use uefi_lemola_os::println;
+use uefi_lemola_os::utils::loop_with_hlt;
+use uefi_lemola_os::{mem_desc, println};
 use uefi_lemola_os::{uefi::*, uefi_utils::*};
 
 use utf16_literal::utf16;
@@ -16,10 +17,8 @@ pub extern "C" fn efi_main(_image_handle: EfiHandle, system_table: &'static mut 
     (output_protocol.reset)(output_protocol, true);
     output_protocol.enable_cursor(true);
     (output_protocol.output_string)(output_protocol, utf16!("Hello World from Rust").as_ptr());
-    output_protocol.change_column();
     println!("{}", utf16!("Hello World from Rust").len());
     println!("Is this ok?");
-    println!("改行されてますか？");
     unsafe {
         WRITER
             .output_protocol
@@ -37,20 +36,9 @@ pub extern "C" fn efi_main(_image_handle: EfiHandle, system_table: &'static mut 
     println!("{}", utf16!("\n")[0]);
     println!("Hello World from macro");
 
-    let boot_services = unsafe {
-        system_table
-            // .as_ref()
-            // .unwrap()
-            .boot_services
-            .as_ref()
-            .unwrap()
-    };
+    let boot_services = system_table.get_boot_services();
 
-    const SIZE: usize = 4096 * 4;
-    use core::mem::MaybeUninit;
-    let mut memmap_buf: MaybeUninit<[u8; SIZE]> = MaybeUninit::uninit();
-    let mem_desc_array = boot_services
-        .get_memory_descriptor_array(memmap_buf.as_mut_ptr(), core::mem::size_of_val(&memmap_buf));
+    let mem_desc_array = mem_desc!(boot_services);
 
     let mut i = 0;
     while let Some(mem_desc) = mem_desc_array.get(i) {
@@ -58,11 +46,11 @@ pub extern "C" fn efi_main(_image_handle: EfiHandle, system_table: &'static mut 
         i += 1;
     }
 
-    loop {}
+    loop_with_hlt();
 }
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("{:?}", info);
-    loop {}
+    loop_with_hlt()
 }
