@@ -15,10 +15,6 @@ unsafe impl Sync for Writer {}
 impl core::fmt::Write for Writer {
     fn write_str(&mut self, s: &str) -> core::fmt::Result {
         if let Some(output_protcol) = self.output_protocol.get() {
-            // for split_s in s.split('\n') {
-            //     output_protcol.output_string(split_s);
-            //     output_protcol.change_column();
-            // }
             output_protcol.output_string(s);
             return Ok(());
         }
@@ -56,11 +52,11 @@ pub struct MemoryMap {
 }
 
 impl MemoryMap {
-    pub fn new(memmap_buf: &mut [u8]) -> Self {
+    pub fn new<T>(memmap_buf_ptr: *mut T, size: usize) -> Self {
         // let mut memmap_buf = [0u8; 4096 * 4];
         Self {
-            memory_map_size: core::mem::size_of_val(&memmap_buf),
-            memory_map: memmap_buf.as_mut_ptr() as *mut EfiMemoryDescriptor,
+            memory_map_size: size,
+            memory_map: memmap_buf_ptr as *mut EfiMemoryDescriptor,
             map_key: 0,
             descriptor_size: 0,
             descriptor_version: 0,
@@ -87,6 +83,40 @@ pub enum MemoryType {
     EfiPersistentMemory,
     EfiUnacceptedMemoryType,
     EfiMaxMemoryType,
+}
+
+pub struct MemoryDescriptorArray {
+    mem_desc_head: *const EfiMemoryDescriptor,
+    mem_desc_size: usize,
+    mem_map_size: usize,
+}
+
+impl MemoryDescriptorArray {
+    pub fn get<'a>(&self, index: usize) -> Option<&'a EfiMemoryDescriptor> {
+        if self.mem_map_size <= index * self.mem_desc_size {
+            // End of MemoryMap; Out of Index
+            return None;
+        }
+        unsafe {
+            self.mem_desc_head
+                .cast::<u8>()
+                .add(index * self.mem_desc_size)
+                .cast::<EfiMemoryDescriptor>()
+                .as_ref()
+        }
+    }
+
+    pub fn new<T>(
+        mem_desc_head: *const T,
+        mem_desc_size: usize,
+        mem_map_size: usize,
+    ) -> MemoryDescriptorArray {
+        MemoryDescriptorArray {
+            mem_desc_head: mem_desc_head.cast::<EfiMemoryDescriptor>(),
+            mem_desc_size,
+            mem_map_size,
+        }
+    }
 }
 
 impl TryFrom<u32> for MemoryType {

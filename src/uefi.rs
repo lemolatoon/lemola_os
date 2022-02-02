@@ -1,5 +1,6 @@
 use core::ffi::c_void;
 
+use crate::uefi_utils::MemoryDescriptorArray;
 use crate::uefi_utils::MemoryType;
 use crate::{print, uefi_utils::MemoryMap};
 
@@ -143,7 +144,7 @@ impl core::fmt::Display for EfiMemoryDescriptor {
         f.write_fmt(format_args!(
             "{{ addr: [ {:#010x} - {:#010x} ], memory_type: {:?} }}",
             self.physical_start,
-            self.physical_start + self.number_of_pages * 4 * 1024,
+            self.physical_start + self.number_of_pages * 4 * 1024 - 1,
             MemoryType::try_from(self.type_)?
         ))?;
         Ok(())
@@ -182,15 +183,11 @@ pub struct EfiSimpleTextInputProtocol {
 }
 
 impl EfiBootServices {
-    pub fn get_memory_map(
-        &self,
-        memmap_buf: &[u8],
-        map: &mut MemoryMap,
-    ) -> Result<EfiStatus, &str> {
-        if memmap_buf.is_empty() {
+    pub fn get_memory_map(&self, size: usize, map: &mut MemoryMap) -> Result<EfiStatus, &str> {
+        if size == 0 {
             return Err("TOO SMALL BUFFER SIZE");
         }
-        map.memory_map_size = core::mem::size_of_val(memmap_buf);
+        map.memory_map_size = size;
         let status = (&self.get_memory_map)(
             &mut map.memory_map_size,
             map.memory_map,
@@ -200,6 +197,17 @@ impl EfiBootServices {
         );
         Ok(status)
     }
+
+    pub fn get_memory_descriptor_array<T>(
+        &self,
+        memmap_buf_ptr: *mut T,
+        size: usize,
+    ) -> MemoryDescriptorArray {
+        let mut map = MemoryMap::new(memmap_buf_ptr, size);
+        self.get_memory_map(size, &mut map).unwrap();
+
+        MemoryDescriptorArray::new(memmap_buf_ptr, map.descriptor_size, map.memory_map_size)
+    }
 }
 
 impl EfiSimpleTextOutputProtocol {
@@ -208,7 +216,7 @@ impl EfiSimpleTextOutputProtocol {
         use heapless::*;
         (self.output_string)(
             self,
-            msg.encode_utf16().collect::<Vec<u16, U1024>>().as_ptr(),
+            msg.encode_utf16().collect::<Vec<u16, U4096>>().as_ptr(),
         );
     }
 

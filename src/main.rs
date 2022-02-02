@@ -4,10 +4,7 @@
 
 use core::panic::PanicInfo;
 use uefi_lemola_os::println;
-use uefi_lemola_os::{
-    uefi::*,
-    uefi_utils::{self, *},
-};
+use uefi_lemola_os::{uefi::*, uefi_utils::*};
 
 use utf16_literal::utf16;
 #[no_mangle]
@@ -40,10 +37,6 @@ pub extern "C" fn efi_main(_image_handle: EfiHandle, system_table: &'static mut 
     println!("{}", utf16!("\n")[0]);
     println!("Hello World from macro");
 
-    let mut map;
-    const SIZE: usize = 4096 * 4;
-    use core::mem::MaybeUninit;
-    let memmap_buf: MaybeUninit<[u8; SIZE]> = MaybeUninit::uninit();
     let boot_services = unsafe {
         system_table
             // .as_ref()
@@ -52,32 +45,17 @@ pub extern "C" fn efi_main(_image_handle: EfiHandle, system_table: &'static mut 
             .as_ref()
             .unwrap()
     };
-    let mut memmap_buf_inited;
-    unsafe {
-        memmap_buf_inited = memmap_buf.assume_init();
-        map = MemoryMap::new(&mut memmap_buf_inited);
-        boot_services
-            .get_memory_map(&mut memmap_buf_inited, &mut map)
-            .unwrap();
-    }
-    println!("{:?}", map);
+
+    const SIZE: usize = 4096 * 4;
+    use core::mem::MaybeUninit;
+    let mut memmap_buf: MaybeUninit<[u8; SIZE]> = MaybeUninit::uninit();
+    let mem_desc_array = boot_services
+        .get_memory_descriptor_array(memmap_buf.as_mut_ptr(), core::mem::size_of_val(&memmap_buf));
+
     let mut i = 0;
-    unsafe {
-        let mut mem_desc = map.memory_map.as_ref().unwrap();
-        while mem_desc.number_of_pages != 0 {
-            i += 1;
-            mem_desc = map
-                .memory_map
-                .cast::<u8>()
-                .add(map.descriptor_size as usize * i)
-                .cast::<EfiMemoryDescriptor>()
-                .as_ref()
-                .unwrap();
-            use uefi_utils::MemoryType::*;
-            if let EfiConventionalMemory = MemoryType::try_from(mem_desc.type_).unwrap() {
-                println!("{}", mem_desc);
-            }
-        }
+    while let Some(mem_desc) = mem_desc_array.get(i) {
+        println!("{}", mem_desc);
+        i += 1;
     }
 
     loop {}
