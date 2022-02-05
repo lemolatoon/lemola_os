@@ -1,8 +1,10 @@
 use core::ffi::c_void;
+use core::fmt::Error;
 
+use crate::println;
 use crate::uefi_utils::MemoryDescriptorArray;
+use crate::uefi_utils::MemoryMap;
 use crate::uefi_utils::MemoryType;
-use crate::{print, uefi_utils::MemoryMap};
 
 type CHAR16 = u16;
 pub type EfiStatus = usize;
@@ -26,7 +28,7 @@ pub struct EfiSystemTable {
     pub console_in_handle: EfiHandle,
     pub con_in: *mut EfiSimpleTextInputProtocol,
     pub console_out_handle: EfiHandle,
-    pub con_out: &'static mut EfiSimpleTextOutputProtocol,
+    pub con_out: *mut EfiSimpleTextOutputProtocol,
     pub standerd_error_handle: EfiHandle,
     pub std_err: *mut EfiSimpleTextOutputProtocol,
     pub runtime_services: *mut EfiRuntimeServices,
@@ -38,6 +40,10 @@ pub struct EfiSystemTable {
 impl EfiSystemTable {
     pub fn get_boot_services(&self) -> &EfiBootServices {
         unsafe { self.boot_services.as_ref().unwrap() }
+    }
+
+    pub fn output_protocol(&self) -> &EfiSimpleTextOutputProtocol {
+        unsafe { self.con_out.as_ref().unwrap() }
     }
 }
 
@@ -115,7 +121,7 @@ pub struct EfiBootServices {
     start_image: FnPtr,
     exit: FnPtr,
     unload_image: FnPtr,
-    exit_boot_services: FnPtr,
+    exit_boot_services: extern "efiapi" fn(image_handle: EfiHandle, map_key: usize) -> EfiStatus,
     get_next_monotonic_count: FnPtr,
     stall: FnPtr,
     set_watchdog_timer: FnPtr,
@@ -189,10 +195,7 @@ pub struct EfiSimpleTextInputProtocol {
 }
 
 impl EfiBootServices {
-    pub fn get_memory_map(&self, size: usize, map: &mut MemoryMap) -> Result<EfiStatus, &str> {
-        if size == 0 {
-            return Err("TOO SMALL BUFFER SIZE");
-        }
+    pub fn get_memory_map(&self, size: usize, map: &mut MemoryMap) -> Result<EfiStatusCode, &str> {
         map.memory_map_size = size;
         let status = (&self.get_memory_map)(
             &mut map.memory_map_size,
@@ -201,7 +204,14 @@ impl EfiBootServices {
             &mut map.descriptor_size,
             &mut map.descriptor_version,
         );
-        Ok(status)
+        println!(
+            "get_memory_map: {:?}",
+            EfiStatusCode::try_from(status).unwrap()
+        );
+        if EfiStatusCode::try_from(status).unwrap() == EfiStatusCode::EfiBufferTooSmall {
+            println!("buffer too small");
+        }
+        Ok(status.try_into().unwrap())
     }
 
     pub fn get_memory_descriptor_array<T>(
@@ -212,18 +222,43 @@ impl EfiBootServices {
         let mut map = MemoryMap::new(memmap_buf_ptr, size);
         self.get_memory_map(size, &mut map).unwrap();
 
-        MemoryDescriptorArray::new(memmap_buf_ptr, map.descriptor_size, map.memory_map_size)
+        MemoryDescriptorArray::new(
+            memmap_buf_ptr,
+            map.descriptor_size,
+            map.memory_map_size,
+            map.map_key,
+        )
+    }
+
+    pub fn exit_boot_services(
+        &self,
+        image_handle: EfiHandle,
+        map_key: usize,
+    ) -> Result<EfiStatusCode, Error> {
+        let status = (self.exit_boot_services)(image_handle, map_key);
+        println!(
+            "exit_boot_services: {:?}",
+            EfiStatusCode::try_from(status).unwrap()
+        );
+        Ok(status.try_into().unwrap())
     }
 }
 
 impl EfiSimpleTextOutputProtocol {
-    pub fn output_string(&self, msg: &str) {
+    pub fn output_string(&self, msg: &str) -> EfiStatusCode {
         use heapless::consts::*;
         use heapless::*;
-        (self.output_string)(
+        let status = (self.output_string)(
             self,
             msg.encode_utf16().collect::<Vec<u16, U4096>>().as_ptr(),
         );
+        status.try_into().unwrap()
+    }
+
+    pub fn reset(&self, b: bool) -> EfiStatusCode {
+        let status = (self.reset)(self, b);
+        println!("reset: {:?}", EfiStatusCode::try_from(status));
+        status.try_into().unwrap()
     }
 
     pub fn enable_cursor(&self, b: bool) {
@@ -245,4 +280,159 @@ impl EfiSimpleTextOutputProtocol {
 pub struct EfiInputKey {
     pub scan_code: u16,
     pub unicode_char: CHAR16,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum EfiStatusCode {
+    EfiSuccess,
+    EfiLoadError,
+    EfiInvalidParameter,
+    EfiUnsupported,
+    EfiBadBufferSize,
+    EfiBufferTooSmall,
+    EfiNotReady,
+    EfiDeviceError,
+    EfiWriteProtected,
+    EfiOutOfResources,
+    EfiVolumeCorrupted,
+    EfiVolumeFull,
+    EfiNoMedia,
+    EfiMediaChanged,
+    EfiNotFound,
+    EfiAccessDenied,
+    EfiNoResponse,
+    EfiNoMapping,
+    EfiTimeout,
+    EfiNotStarted,
+    EfiAlreadyStarted,
+    EfiAborted,
+    EfiIcmpError,
+    EfiTftpError,
+    EfiProtocolError,
+    EfiIncompatibleVersion,
+    EfiSecurityViolation,
+    EfiCrcError,
+    EfiEndOfMedia,
+    EfiEndOfFile,
+    EfiInvalidLanguage,
+    EfiCompromisedData,
+    EfiIpAddressConflict,
+    EfiHttpError,
+    EfiWarnUnknownGlyph,
+    EfiWarnDeleteFailure,
+    EfiWarnWriteFailure,
+    EfiWarnBufferTooSmall,
+    EfiWarnStaleData,
+    EfiWarnFileSystem,
+    EfiWarnResetRequired,
+}
+
+impl EfiStatusCode {
+    pub fn is_err(&self) -> bool {
+        use EfiStatusCode::*;
+        match self {
+            EfiSuccess => false,
+            EfiLoadError => true,
+            EfiInvalidParameter => true,
+            EfiUnsupported => true,
+            EfiBadBufferSize => true,
+            EfiBufferTooSmall => true,
+            EfiNotReady => true,
+            EfiDeviceError => true,
+            EfiWriteProtected => true,
+            EfiOutOfResources => true,
+            EfiVolumeCorrupted => true,
+            EfiVolumeFull => true,
+            EfiNoMedia => true,
+            EfiMediaChanged => true,
+            EfiNotFound => true,
+            EfiAccessDenied => true,
+            EfiNoResponse => true,
+            EfiNoMapping => true,
+            EfiTimeout => true,
+            EfiNotStarted => true,
+            EfiAlreadyStarted => true,
+            EfiAborted => true,
+            EfiIcmpError => true,
+            EfiTftpError => true,
+            EfiProtocolError => true,
+            EfiIncompatibleVersion => true,
+            EfiSecurityViolation => true,
+            EfiCrcError => true,
+            EfiEndOfMedia => true,
+            EfiEndOfFile => true,
+            EfiInvalidLanguage => true,
+            EfiCompromisedData => true,
+            EfiIpAddressConflict => true,
+            EfiHttpError => true,
+            EfiWarnUnknownGlyph => false,
+            EfiWarnDeleteFailure => false,
+            EfiWarnWriteFailure => false,
+            EfiWarnBufferTooSmall => false,
+            EfiWarnStaleData => false,
+            EfiWarnFileSystem => false,
+            EfiWarnResetRequired => false,
+        }
+    }
+}
+
+impl TryFrom<EfiStatus> for EfiStatusCode {
+    type Error = Error;
+
+    fn try_from(value: EfiStatus) -> Result<Self, Self::Error> {
+        use EfiStatusCode::*;
+        let status;
+        if value << 8 != 0 {
+            status = match (value << 8) >> 8 {
+                1 => EfiLoadError,
+                2 => EfiInvalidParameter,
+                3 => EfiUnsupported,
+                4 => EfiBadBufferSize,
+                5 => EfiBufferTooSmall,
+                6 => EfiNotReady,
+                7 => EfiDeviceError,
+                8 => EfiWriteProtected,
+                9 => EfiOutOfResources,
+                10 => EfiVolumeCorrupted,
+                11 => EfiVolumeFull,
+                12 => EfiNoMedia,
+                13 => EfiMediaChanged,
+                14 => EfiNotFound,
+                15 => EfiAccessDenied,
+                16 => EfiNoResponse,
+                17 => EfiNoMapping,
+                18 => EfiTimeout,
+                19 => EfiNotStarted,
+                20 => EfiAlreadyStarted,
+                21 => EfiAborted,
+                22 => EfiIcmpError,
+                23 => EfiTftpError,
+                24 => EfiProtocolError,
+                25 => EfiIncompatibleVersion,
+                26 => EfiSecurityViolation,
+                27 => EfiCrcError,
+                28 => EfiEndOfMedia,
+                31 => EfiEndOfFile,
+                32 => EfiInvalidLanguage,
+                33 => EfiCompromisedData,
+                34 => EfiIpAddressConflict,
+                35 => EfiHttpError,
+                _ => return Err(Error),
+            }
+        } else {
+            status = match value {
+                0 => EfiSuccess,
+                1 => EfiWarnUnknownGlyph,
+                2 => EfiWarnDeleteFailure,
+                3 => EfiWarnWriteFailure,
+                4 => EfiBufferTooSmall,
+                5 => EfiWarnStaleData,
+                6 => EfiWarnFileSystem,
+                7 => EfiWarnResetRequired,
+                _ => return Err(Error),
+            }
+        }
+
+        Ok(status)
+    }
 }

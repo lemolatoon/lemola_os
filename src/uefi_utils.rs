@@ -103,6 +103,7 @@ pub struct MemoryDescriptorArray {
     mem_desc_head: *const EfiMemoryDescriptor,
     mem_desc_size: usize,
     mem_map_size: usize,
+    map_key: usize,
 }
 
 impl MemoryDescriptorArray {
@@ -124,12 +125,18 @@ impl MemoryDescriptorArray {
         mem_desc_head: *const T,
         mem_desc_size: usize,
         mem_map_size: usize,
+        map_key: usize,
     ) -> MemoryDescriptorArray {
         MemoryDescriptorArray {
             mem_desc_head: mem_desc_head.cast::<EfiMemoryDescriptor>(),
             mem_desc_size,
             mem_map_size,
+            map_key,
         }
+    }
+
+    pub fn map_key(&self) -> usize {
+        self.map_key
     }
 }
 
