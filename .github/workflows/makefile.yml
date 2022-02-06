@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ master ]
 
+env:
+    CARGO_TERM_COLOR: always
+
 jobs:
   build:
 
@@ -13,6 +16,17 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+
+    - name: set nightly
+      run: |
+          rustup install nightly
+          rustup default nightly
+
+    - name: add target
+      run: rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
+
+    - name: build std
+      run: cargo build -Z build-std
       
     - name: Build
       run: make
