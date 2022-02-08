@@ -1,6 +1,7 @@
 use core::ffi::c_void;
 use core::fmt::Error;
 
+use crate::dbg;
 use crate::println;
 use crate::uefi_utils::MemoryDescriptorArray;
 use crate::uefi_utils::MemoryMap;
@@ -11,6 +12,7 @@ pub type EfiStatus = usize;
 pub type EfiHandle = *mut c_void;
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct EfiTableHeader {
     pub signature: u64,
     pub revision: u32,
@@ -116,25 +118,32 @@ pub struct EfiBootServices {
     locate_handle: FnPtr,
     locate_device_path: FnPtr,
     install_configuration_table: FnPtr,
+    // Image Services
     load_image: FnPtr,
     start_image: FnPtr,
     exit: FnPtr,
     unload_image: FnPtr,
     exit_boot_services: extern "efiapi" fn(image_handle: EfiHandle, map_key: usize) -> EfiStatus,
+    // Miscellaneous Services
     get_next_monotonic_count: FnPtr,
     stall: FnPtr,
     set_watchdog_timer: FnPtr,
+    // DriverSupport Services
     connect_controller: FnPtr,
     disconnect_controller: FnPtr,
+    // Open and Close Protocol Services
     open_protocol: FnPtr,
     close_protocol: FnPtr,
     open_protocol_information: FnPtr,
+    // Library Services
     protocols_per_handle: FnPtr,
     locate_handle_buffer: FnPtr,
     locate_protocol: FnPtr,
     install_multiple_protocol_interfaces: FnPtr,
     uninstall_multiple_protocol_interfaces: FnPtr,
+    // 32-bit CRC Services
     calculate_crc32: FnPtr,
+    // Miscellaneous Services
     copy_mem: FnPtr,
     set_mem: FnPtr,
     create_event_ex: FnPtr,
@@ -202,10 +211,6 @@ impl EfiBootServices {
             &mut map.map_key,
             &mut map.descriptor_size,
             &mut map.descriptor_version,
-        );
-        println!(
-            "get_memory_map: {:?}",
-            EfiStatusCode::try_from(status).unwrap()
         );
         if EfiStatusCode::try_from(status).unwrap() == EfiStatusCode::EfiBufferTooSmall {
             println!("buffer too small");

@@ -3,6 +3,7 @@
 #![feature(abi_efiapi)]
 
 use core::panic::PanicInfo;
+use uefi_lemola_os::dbg;
 use uefi_lemola_os::utils::loop_with_hlt;
 use uefi_lemola_os::{mem_desc, println};
 use uefi_lemola_os::{uefi::*, uefi_utils::*};
@@ -27,9 +28,16 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
         println!("{}", desc);
     }
 
+    let mem_desc_array = mem_desc!(boot_services);
+
+    let map_key = mem_desc_array.map_key();
+
+    // There must be no stdout between get_memorymap and exit_boot_services
     let status = boot_services
         .exit_boot_services(image_handle, map_key)
         .unwrap();
+
+    dbg!(&status);
 
     println!("{:?}", status);
 
