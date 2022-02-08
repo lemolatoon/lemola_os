@@ -1,9 +1,11 @@
 build:
-	cargo build --verbose
+	cd bootloader && \
+	cargo build --verbose && \
+	cd .. 
 
 target/x86_64-unknown-uefi/debug/uefi_lemola_os.efi: build
 	mkdir -p mnt/EFI/BOOT && \
-	cp target/x86_64-unknown-uefi/debug/uefi_lemola_os.efi mnt/EFI/BOOT/BOOTX64.EFI 
+	cp bootloader/target/x86_64-unknown-uefi/debug/uefi_lemola_os.efi mnt/EFI/BOOT/BOOTX64.EFI 
 
 
 run: target/x86_64-unknown-uefi/debug/uefi_lemola_os.efi
