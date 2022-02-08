@@ -4,7 +4,6 @@ use core::fmt::Error;
 use crate::println;
 use crate::uefi_utils::MemoryDescriptorArray;
 use crate::uefi_utils::MemoryMap;
-use crate::uefi_utils::MemoryType;
 
 type CHAR16 = u16;
 pub type EfiStatus = usize;
@@ -434,5 +433,55 @@ impl TryFrom<EfiStatus> for EfiStatusCode {
         }
 
         Ok(status)
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum MemoryType {
+    EfiReservedMemoryType,
+    EfiLoaderCode,
+    EfiLoaderData,
+    EfiBootServicesCode,
+    EfiBootServicesData,
+    EfiRuntimeServicesCode,
+    EfiRuntimeServicesData,
+    EfiConventionalMemory,
+    EfiUnusableMemory,
+    EfiACPIRecaimMemory,
+    EfiACPIMemoryNVS,
+    EfiMemoryMappedIO,
+    EfiMemoryMappedIOPortSpace,
+    EfiPalCode,
+    EfiPersistentMemory,
+    EfiUnacceptedMemoryType,
+    EfiMaxMemoryType,
+}
+
+impl TryFrom<u32> for MemoryType {
+    type Error = Error;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        use crate::uefi::MemoryType::*;
+        let mem_type = match value {
+            0 => EfiReservedMemoryType,
+            1 => EfiLoaderCode,
+            2 => EfiLoaderData,
+            3 => EfiBootServicesCode,
+            4 => EfiBootServicesData,
+            5 => EfiRuntimeServicesCode,
+            6 => EfiRuntimeServicesData,
+            7 => EfiConventionalMemory,
+            8 => EfiUnusableMemory,
+            9 => EfiACPIRecaimMemory,
+            10 => EfiACPIMemoryNVS,
+            11 => EfiMemoryMappedIO,
+            12 => EfiMemoryMappedIOPortSpace,
+            13 => EfiPalCode,
+            14 => EfiPersistentMemory,
+            15 => EfiUnacceptedMemoryType,
+            16 => EfiMaxMemoryType,
+            _ => return Err(Error),
+        };
+        Ok(mem_type)
     }
 }

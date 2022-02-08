@@ -16,14 +16,19 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
 
     let mem_desc_array = mem_desc!(boot_services);
 
-    let mut i = 0;
-    while let Some(mem_desc) = mem_desc_array.get(i) {
-        println!("{}", mem_desc);
-        i += 1;
+    let map_key = mem_desc_array.map_key();
+
+    use uefi_lemola_os::uefi::MemoryType::*;
+    let iter = mem_desc_array
+        .iter()
+        .filter(|desc| MemoryType::try_from(desc.type_).unwrap() == EfiConventionalMemory);
+
+    for desc in iter {
+        println!("{}", desc);
     }
 
     let status = boot_services
-        .exit_boot_services(image_handle, mem_desc_array.map_key())
+        .exit_boot_services(image_handle, map_key)
         .unwrap();
 
     println!("{:?}", status);

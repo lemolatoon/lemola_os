@@ -78,27 +78,6 @@ impl MemoryMap {
     }
 }
 
-#[derive(Debug)]
-pub enum MemoryType {
-    EfiReservedMemoryType,
-    EfiLoaderCode,
-    EfiLoaderData,
-    EfiBootServicesCode,
-    EfiBootServicesData,
-    EfiRuntimeServicesCode,
-    EfiRuntimeServicesData,
-    EfiConventionalMemory,
-    EfiUnusableMemory,
-    EfiACPIRecaimMemory,
-    EfiACPIMemoryNVS,
-    EfiMemoryMappedIO,
-    EfiMemoryMappedIOPortSpace,
-    EfiPalCode,
-    EfiPersistentMemory,
-    EfiUnacceptedMemoryType,
-    EfiMaxMemoryType,
-}
-
 pub struct MemoryDescriptorArray {
     mem_desc_head: *const EfiMemoryDescriptor,
     mem_desc_size: usize,
@@ -138,33 +117,26 @@ impl MemoryDescriptorArray {
     pub fn map_key(&self) -> usize {
         self.map_key
     }
+
+    pub fn iter(self) -> MemoryDescriptorIterator {
+        MemoryDescriptorIterator {
+            mem_desc_array: self,
+            index: 0,
+        }
+    }
 }
 
-impl TryFrom<u32> for MemoryType {
-    type Error = Error;
+pub struct MemoryDescriptorIterator {
+    mem_desc_array: MemoryDescriptorArray,
+    index: usize,
+}
 
-    fn try_from(value: u32) -> Result<Self, Self::Error> {
-        use crate::uefi_utils::MemoryType::*;
-        let mem_type = match value {
-            0 => EfiReservedMemoryType,
-            1 => EfiLoaderCode,
-            2 => EfiLoaderData,
-            3 => EfiBootServicesCode,
-            4 => EfiBootServicesData,
-            5 => EfiRuntimeServicesCode,
-            6 => EfiRuntimeServicesData,
-            7 => EfiConventionalMemory,
-            8 => EfiUnusableMemory,
-            9 => EfiACPIRecaimMemory,
-            10 => EfiACPIMemoryNVS,
-            11 => EfiMemoryMappedIO,
-            12 => EfiMemoryMappedIOPortSpace,
-            13 => EfiPalCode,
-            14 => EfiPersistentMemory,
-            15 => EfiUnacceptedMemoryType,
-            16 => EfiMaxMemoryType,
-            _ => return Err(Error),
-        };
-        Ok(mem_type)
+impl Iterator for MemoryDescriptorIterator {
+    type Item = &'static EfiMemoryDescriptor;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.index += 1;
+
+        self.mem_desc_array.get(self.index + 1)
     }
 }

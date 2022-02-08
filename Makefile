@@ -1,5 +1,5 @@
 build:
-	cargo build
+	cargo build --verbose
 
 target/x86_64-unknown-uefi/debug/uefi_lemola_os.efi: build
 	mkdir -p mnt/EFI/BOOT && \
