@@ -1,0 +1,35 @@
+{
+    "name": "lemola_os",
+    "context": ".",
+    "dockerfile": "Dockerfile",
+
+    "settings": {
+		"lldb.executable": "/usr/bin/lldb",
+		"files.watcherExclude": {
+			"**/target/**": true
+		},
+		"rust-analyzer.checkOnSave.command": "clippy",
+		"rust-analyzer.checkOnSave.allTargets": false,
+		"editor.formatOnSave": true
+	},
+
+	"build": {
+		"dockerfile": "Dockerfile",
+		"args": {
+			"VARIANT": "buster"
+		}
+	},
+	"extensions": [
+		"vadimcn.vscode-lldb",
+		"mutantdino.resourcemonitor",
+		"matklad.rust-analyzer",
+		"tamasfe.even-better-toml",
+		"serayuzgur.crates"
+	],
+	"runArgs": [
+		"--cap-add=SYS_PTRACE",
+		"--security-opt",
+		"seccomp=unconfined"
+	],
+
+}

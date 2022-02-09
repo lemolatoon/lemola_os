@@ -17,6 +17,9 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
+    - name: bootloader
+      run: cd bootloader
+
     - name: set nightly
       run: |
           rustup install nightly
@@ -27,6 +30,9 @@ jobs:
 
     - name: build std
       run: cargo build -Z build-std
+
+    - name: before make
+      run: cd ..
       
     - name: Build
       run: make
