@@ -17,9 +17,6 @@ jobs:
     steps:
     - uses: actions/checkout@v2
 
-    - name: bootloader
-      run: cd bootloader
-
     - name: set nightly
       run: |
           rustup install nightly
@@ -29,10 +26,9 @@ jobs:
       run: rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
 
     - name: build std
-      run: cargo build -Z build-std
-
-    - name: before make
-      run: cd ..
+      run: |
+          cd bootloader
+          cargo build -Z build-std
       
     - name: Build
       run: make
