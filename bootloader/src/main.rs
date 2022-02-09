@@ -35,10 +35,6 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
         .exit_boot_services(image_handle, map_key)
         .unwrap();
 
-    dbg!(&status);
-
-    println!("{:?}", status);
-
     loop_with_hlt();
 }
 

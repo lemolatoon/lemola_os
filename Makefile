@@ -1,6 +1,6 @@
 build:
 	cd bootloader && \
-	cargo build --verbose && \
+	cargo build && \
 	cd .. 
 
 target/x86_64-unknown-uefi/debug/uefi_lemola_os.efi: build
