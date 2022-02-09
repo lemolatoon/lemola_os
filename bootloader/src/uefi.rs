@@ -1,8 +1,9 @@
 use core::ffi::c_void;
 use core::fmt::Error;
 
-use crate::dbg;
+use crate::guid::*;
 use crate::println;
+use crate::protocols::*;
 use crate::uefi_utils::MemoryDescriptorArray;
 use crate::uefi_utils::MemoryMap;
 
@@ -47,8 +48,6 @@ impl EfiSystemTable {
         unsafe { self.con_out.as_ref().unwrap() }
     }
 }
-
-type EfiGuid = u128;
 
 #[repr(C)]
 pub struct EfiConfigurationTable {
@@ -138,7 +137,11 @@ pub struct EfiBootServices {
     // Library Services
     protocols_per_handle: FnPtr,
     locate_handle_buffer: FnPtr,
-    locate_protocol: FnPtr,
+    locate_protocol: extern "efiapi" fn(
+        protocol: &EfiGuid,
+        registration: *const c_void,
+        interface: &*const c_void,
+    ) -> EfiStatus,
     install_multiple_protocol_interfaces: FnPtr,
     uninstall_multiple_protocol_interfaces: FnPtr,
     // 32-bit CRC Services
@@ -205,7 +208,7 @@ pub struct EfiSimpleTextInputProtocol {
 impl EfiBootServices {
     pub fn get_memory_map(&self, size: usize, map: &mut MemoryMap) -> Result<EfiStatusCode, &str> {
         map.memory_map_size = size;
-        let status = (&self.get_memory_map)(
+        let status = (self.get_memory_map)(
             &mut map.memory_map_size,
             map.memory_map,
             &mut map.map_key,
@@ -245,6 +248,16 @@ impl EfiBootServices {
             EfiStatusCode::try_from(status).unwrap()
         );
         Ok(status.try_into().unwrap())
+    }
+
+    pub fn graphics_output_protocol(&self) -> &EfiGraphicsOutputProtocol {
+        let ptr = core::ptr::null();
+        (self.locate_protocol)(&EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID, core::ptr::null(), &ptr);
+        unsafe {
+            ptr.cast::<EfiGraphicsOutputProtocol>()
+                .as_ref()
+                .expect("provided pointer was null")
+        }
     }
 }
 
@@ -385,9 +398,8 @@ impl TryFrom<EfiStatus> for EfiStatusCode {
 
     fn try_from(value: EfiStatus) -> Result<Self, Self::Error> {
         use EfiStatusCode::*;
-        let status;
-        if value << 8 != 0 {
-            status = match (value << 8) >> 8 {
+        let status = if value << 8 != 0 {
+            match (value << 8) >> 8 {
                 1 => EfiLoadError,
                 2 => EfiInvalidParameter,
                 3 => EfiUnsupported,
@@ -424,7 +436,7 @@ impl TryFrom<EfiStatus> for EfiStatusCode {
                 _ => return Err(Error),
             }
         } else {
-            status = match value {
+            match value {
                 0 => EfiSuccess,
                 1 => EfiWarnUnknownGlyph,
                 2 => EfiWarnDeleteFailure,
@@ -435,7 +447,7 @@ impl TryFrom<EfiStatus> for EfiStatusCode {
                 7 => EfiWarnResetRequired,
                 _ => return Err(Error),
             }
-        }
+        };
 
         Ok(status)
     }

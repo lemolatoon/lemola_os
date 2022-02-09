@@ -3,6 +3,11 @@ build:
 	cargo build && \
 	cd .. 
 
+clippy:
+	cd bootloader && \
+	cargo clippy && \
+	cd ..
+
 target/x86_64-unknown-uefi/debug/uefi_lemola_os.efi: build
 	mkdir -p mnt/EFI/BOOT && \
 	cp bootloader/target/x86_64-unknown-uefi/debug/uefi_lemola_os.efi mnt/EFI/BOOT/BOOTX64.EFI 

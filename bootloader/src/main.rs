@@ -26,15 +26,36 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
         println!("{}", desc);
     }
 
+    let protocol = boot_services.graphics_output_protocol();
+    println!("{:?}", protocol);
+    let base_addr = protocol.mode.frame_buffer_base;
+    let size = protocol.mode.frame_buffer_size;
+    for i in 0..size / 4 {
+        unsafe {
+            *((base_addr as *mut u8).add(i)) = 0xff;
+        }
+    }
+    dbg!(base_addr);
+
     let mem_desc_array = mem_desc!(boot_services);
 
     let map_key = mem_desc_array.map_key();
+    for i in size / 2..size {
+        unsafe {
+            *((base_addr as *mut u8).add(i)) = 0xa0;
+        }
+    }
 
     // There must be no stdout between get_memorymap and exit_boot_services
-    let status = boot_services
+    let _status = boot_services
         .exit_boot_services(image_handle, map_key)
         .unwrap();
 
+    for i in 0..size / 2 {
+        unsafe {
+            *((base_addr as *mut u8).add(i)) = 0xfa;
+        }
+    }
     loop_with_hlt();
 }
 
