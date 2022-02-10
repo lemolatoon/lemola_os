@@ -11,17 +11,18 @@ RUN rustup default nightly
 
 RUN rustup --version
 
-RUN git clone https://github.com/lemolatoon/lemola_os.git
-
 WORKDIR /lemola_os
 
 RUN rustup component add rust-src --toolchain nightly-x86_64-unknown-linux-gnu
 
-RUN cargo build -Z build-std
+# RUN cargo build -Z build-std
 
 RUN rustup component add rustfmt
 RUN rustup component add clippy
 
+
+RUN apt-get install bsdmainutils
+RUN apt-get install less
 
 RUN apt-get install qemu-kvm -y
 

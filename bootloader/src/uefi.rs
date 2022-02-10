@@ -3,7 +3,7 @@ use core::fmt::Error;
 
 use crate::guid::*;
 use crate::println;
-use crate::protocols::*;
+use crate::protocols::EfiGraphicsOutputProtocol;
 use crate::uefi_utils::MemoryDescriptorArray;
 use crate::uefi_utils::MemoryMap;
 
@@ -181,7 +181,7 @@ pub struct EfiSimpleTextOutputProtocol {
     query_mode: extern "efiapi" fn(&Self, usize, *mut usize, *mut usize) -> EfiStatus,
     set_mode: FnPtr,
     set_attribute: FnPtr,
-    pub clear_screen: extern "efiapi" fn(&Self) -> EfiStatus,
+    clear_screen: extern "efiapi" fn(&Self) -> EfiStatus,
     pub set_cursor_position: extern "efiapi" fn(&Self, usize, usize) -> EfiStatus,
     enable_cursor: extern "efiapi" fn(&Self, bool) -> EfiStatus,
     pub mode: *mut SimpleTextOutputMode,
@@ -259,6 +259,17 @@ impl EfiBootServices {
                 .expect("provided pointer was null")
         }
     }
+
+    pub fn locate_protocol<T: HasGuid>(&self) -> &T {
+        let ptr = core::ptr::null();
+        println!("{:X?}", T::get_guid());
+        (self.locate_protocol)(T::get_guid(), core::ptr::null(), &ptr);
+        unsafe {
+            ptr.cast::<T>()
+                .as_ref()
+                .expect("provided pointer was null")
+        }
+    }
 }
 
 impl EfiSimpleTextOutputProtocol {
@@ -275,6 +286,11 @@ impl EfiSimpleTextOutputProtocol {
     pub fn reset(&self, b: bool) -> EfiStatusCode {
         let status = (self.reset)(self, b);
         println!("reset: {:?}", EfiStatusCode::try_from(status));
+        status.try_into().unwrap()
+    }
+
+    pub fn clear_screen(&self) -> EfiStatusCode {
+        let status = (self.clear_screen)(self);
         status.try_into().unwrap()
     }
 
@@ -297,6 +313,21 @@ impl EfiSimpleTextOutputProtocol {
 pub struct EfiInputKey {
     pub scan_code: u16,
     pub unicode_char: CHAR16,
+}
+
+#[repr(C)]
+pub struct EfiTime {
+    year: u16,
+    month: u8,
+    day: u8,
+    hour: u8,
+    minute: u8,
+    second: u8,
+    pad1: u8,
+    nanosecond: u32,
+    time_zone: u16,
+    day_light: u8,
+    pad2: u8,
 }
 
 #[derive(Debug, PartialEq)]

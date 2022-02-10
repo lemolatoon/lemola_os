@@ -1,9 +1,8 @@
 {
-    "name": "lemola_os",
-    "context": ".",
-    "dockerfile": "Dockerfile",
-
-    "settings": {
+	"name": "lemola_os",
+	"context": ".",
+	"dockerfile": "Dockerfile",
+	"settings": {
 		"lldb.executable": "/usr/bin/lldb",
 		"files.watcherExclude": {
 			"**/target/**": true
@@ -12,7 +11,6 @@
 		"rust-analyzer.checkOnSave.allTargets": false,
 		"editor.formatOnSave": true
 	},
-
 	"build": {
 		"dockerfile": "Dockerfile",
 		"args": {
@@ -31,5 +29,4 @@
 		"--security-opt",
 		"seccomp=unconfined"
 	],
-
 }
