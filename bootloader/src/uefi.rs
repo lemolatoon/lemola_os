@@ -90,7 +90,12 @@ pub struct EfiBootServices {
     raise_tpl: FnPtr,
     restore_tpl: FnPtr,
     // Memory Services
-    allocate_pages: FnPtr,
+    allocate_pages: extern "efiapi" fn(
+        type_: u32,
+        memory_type: u32,
+        pages: u64,
+        memory: *const u64,
+    ) -> EfiStatus,
     free_pages: FnPtr,
     pub get_memory_map: extern "efiapi" fn(
         memory_map_size: &mut usize,
@@ -151,6 +156,25 @@ pub struct EfiBootServices {
     copy_mem: FnPtr,
     set_mem: FnPtr,
     create_event_ex: FnPtr,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub enum EfiAllocateType {
+    AllocateAnyPages = 0,
+    AllocateMaxAddress = 1,
+    AllocateAddress = 2,
+    MaxAllocateType = 3,
+}
+
+impl Into<u32> for EfiAllocateType {
+    fn into(self) -> u32 {
+        match self {
+            EfiAllocateType::AllocateAnyPages => 0,
+            EfiAllocateType::AllocateMaxAddress => 1,
+            EfiAllocateType::AllocateAddress => 2,
+            EfiAllocateType::MaxAllocateType => 3,
+        }
+    }
 }
 
 #[repr(C)]
@@ -220,6 +244,22 @@ impl EfiBootServices {
             println!("buffer too small");
         }
         Ok(status.try_into().unwrap())
+    }
+
+    pub fn allocate_pages(
+        &self,
+        type_: EfiAllocateType,
+        memory_type: MemoryType,
+        pages: u64,
+        memory: *const u64,
+    ) -> EfiStatusCode {
+        let status: EfiStatusCode =
+            (self.allocate_pages)(type_.into(), memory_type.into(), pages, memory)
+                .try_into()
+                .unwrap();
+        println!("{:?}", status);
+        assert!(status.is_success());
+        status
     }
 
     pub fn get_memory_descriptor_array<T>(
@@ -538,5 +578,29 @@ impl TryFrom<u32> for MemoryType {
             _ => return Err(Error),
         };
         Ok(mem_type)
+    }
+}
+
+impl Into<u32> for MemoryType {
+    fn into(self) -> u32 {
+        match self {
+            MemoryType::EfiReservedMemoryType => 0,
+            MemoryType::EfiLoaderCode => 1,
+            MemoryType::EfiLoaderData => 2,
+            MemoryType::EfiBootServicesCode => 3,
+            MemoryType::EfiBootServicesData => 4,
+            MemoryType::EfiRuntimeServicesCode => 5,
+            MemoryType::EfiRuntimeServicesData => 6,
+            MemoryType::EfiConventionalMemory => 7,
+            MemoryType::EfiUnusableMemory => 8,
+            MemoryType::EfiACPIRecaimMemory => 9,
+            MemoryType::EfiACPIMemoryNVS => 10,
+            MemoryType::EfiMemoryMappedIO => 11,
+            MemoryType::EfiMemoryMappedIOPortSpace => 12,
+            MemoryType::EfiPalCode => 13,
+            MemoryType::EfiPersistentMemory => 14,
+            MemoryType::EfiUnacceptedMemoryType => 15,
+            MemoryType::EfiMaxMemoryType => 16,
+        }
     }
 }

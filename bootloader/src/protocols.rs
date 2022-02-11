@@ -209,7 +209,7 @@ impl Into<u64> for FileAttributes {
 #[derive(Debug)]
 pub struct EfiFileInfo {
     size: u64,
-    file_size: u64,
+    pub file_size: u64,
     physical_size: u64,
     create_time: EfiTime,
     last_access_time: EfiTime,

@@ -99,10 +99,10 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
             );
         }
     }
-    const FILE_NAME: &str = "\\a.txt\0";
-    // const FILE_NAME: &str = "\\kernel.elf\0";
+    // const FILE_NAME: &str = "\\a.txt\0";
+    const FILE_NAME: &str = "\\kernel.elf\0";
     const FILE_NAME_LEN: usize = FILE_NAME.len();
-    // assert_eq!(FILE_NAME_LEN, 12);
+    assert_eq!(FILE_NAME_LEN, 12);
     const FILE_INFO_SIZE: usize = size_of::<EfiFileInfo>() + size_of::<u16>() * FILE_NAME_LEN;
     let file_info_buffer: [MaybeUninit<u8>; FILE_INFO_SIZE] = MaybeUninit::uninit_array();
     let mut buffer_size = FILE_INFO_SIZE;
@@ -114,12 +114,30 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
             .as_ref()
             .expect("FileInfo was null")
     };
-    unsafe { asm!("jmp $0x101120") };
+
+    let kernel_file_size = file_info.file_size;
+
+    const kernel_base_addr: u64 = 0x100000;
+    const kernel_entry_addr: u64 = 0x101120;
+    boot_services.allocate_pages(
+        EfiAllocateType::AllocateAddress,
+        EfiLoaderData,
+        (kernel_file_size + 0xfff) / 0x1000,
+        &kernel_base_addr,
+    );
+    let f: extern "C" fn() -> usize =
+        unsafe { core::mem::transmute(kernel_entry_addr as *const u8) };
+    println!("\n{}", base_addr);
+    println!("{}", size);
+    dbg!("before jump");
+    let res = f();
+    dbg!("after jump");
+    assert_eq!(res, 32);
+    println!("{}", f());
+    panic!("finished");
+
+    // unsafe { asm!("jmp $0x101120") };
     println!("{:?}", file_info);
-    let status = system_table
-        .output_protocol()
-        .output_string_utf16(dyn_utf16_ptr!("this is test"));
-    use heapless::Vec;
     assert!(!file_info.filename.is_null());
     dbg!(0);
     println!("{:p}", file_info.filename);
