@@ -1,10 +1,20 @@
 #![no_std]
 #![no_main]
 #![feature(abi_efiapi)]
+#![feature(maybe_uninit_uninit_array)]
 
+use core::arch::asm;
+use core::char::decode_utf16;
+use core::mem::size_of;
+use core::mem::MaybeUninit;
 use core::panic::PanicInfo;
+use core::ptr::slice_from_raw_parts;
+use core::ptr::slice_from_raw_parts_mut;
+use heapless::String;
 use uefi_lemola_os::dbg;
+use uefi_lemola_os::dyn_utf16_ptr;
 use uefi_lemola_os::protocols::*;
+use uefi_lemola_os::root_dir;
 use uefi_lemola_os::utils::loop_with_hlt;
 use uefi_lemola_os::{mem_desc, println};
 use uefi_lemola_os::{uefi::*, uefi_utils::*};
@@ -45,7 +55,12 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
     println!("{:?}", status);
 
     let protocol = boot_services.locate_protocol::<EfiSimpleFileSystemProtocol>();
-    let root_dir = protocol.root_dir();
+    let root_dir = MaybeUninit::<&EfiFileProtocol>::uninit();
+    protocol.root_dir(&root_dir);
+    let root_dir = unsafe { root_dir.assume_init() };
+    println!("{:p}", root_dir);
+    root_dir!(protocol, root_dir);
+
     use uefi_lemola_os::print;
     unsafe {
         for i in 0..15 {
@@ -59,17 +74,24 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
             );
         }
     }
-    println!();
-    let protocol = root_dir.open(
+    println!("=======================================");
+    let kernel_file = MaybeUninit::<&EfiFileProtocol>::uninit();
+    let status = root_dir.open(
+        &kernel_file,
         "\\kernel.elf",
         OpenMode::EfiFileModeRead,
         FileAttributes::EfiFileReadOnly,
+    );
+    let kernel_file = unsafe { kernel_file.assume_init() };
+    assert_ne!(
+        root_dir as *const EfiFileProtocol,
+        kernel_file as *const EfiFileProtocol
     );
     unsafe {
         for i in 0..15 {
             print!(
                 "{:X}, ",
-                (protocol as *const EfiFileProtocol)
+                (kernel_file as *const EfiFileProtocol)
                     .cast::<u64>()
                     .add(i)
                     .as_ref()
@@ -77,18 +99,73 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
             );
         }
     }
-
-    for i in size / 4..size / 5 {
-        unsafe {
-            *((base_addr as *mut u8).add(i)) = 0xfa;
+    const FILE_NAME: &str = "\\a.txt\0";
+    // const FILE_NAME: &str = "\\kernel.elf\0";
+    const FILE_NAME_LEN: usize = FILE_NAME.len();
+    // assert_eq!(FILE_NAME_LEN, 12);
+    const FILE_INFO_SIZE: usize = size_of::<EfiFileInfo>() + size_of::<u16>() * FILE_NAME_LEN;
+    let file_info_buffer: [MaybeUninit<u8>; FILE_INFO_SIZE] = MaybeUninit::uninit_array();
+    let mut buffer_size = FILE_INFO_SIZE;
+    kernel_file.get_info(&mut buffer_size, &file_info_buffer);
+    let file_info = unsafe {
+        file_info_buffer
+            .as_ptr()
+            .cast::<EfiFileInfo>()
+            .as_ref()
+            .expect("FileInfo was null")
+    };
+    unsafe { asm!("jmp $0x101120") };
+    println!("{:?}", file_info);
+    let status = system_table
+        .output_protocol()
+        .output_string_utf16(dyn_utf16_ptr!("this is test"));
+    use heapless::Vec;
+    assert!(!file_info.filename.is_null());
+    dbg!(0);
+    println!("{:p}", file_info.filename);
+    println!("{:X}", unsafe { *(file_info.filename) });
+    dbg!(1);
+    for i in 0..FILE_NAME_LEN {
+        dbg!(2);
+        let c = unsafe { file_info.filename.add(i).as_ref().unwrap() };
+        dbg!(3);
+        println!("{}", c);
+        if *c == 0 {
+            break;
         }
     }
+    dbg!(4);
+    // let decoded = unsafe {
+    //     decode_utf16(
+    //         slice_from_raw_parts(file_info.filename, FILE_NAME_LEN)
+    //             .as_ref()
+    //             .unwrap()
+    //             .iter()
+    //             .map(|i| {
+    //                 print!("hello");
+    //                 *i
+    //             }),
+    //     )
+    //     .map(|r| r.unwrap())
+    // };
+    // println!();
+    // for c in decoded {
+    //     print!("{}", c);
+    // }
+    // println!("{:?}", status);
+    assert!(status.is_success());
+
+    // for i in size / 4..size / 5 {
+    //     unsafe {
+    //         *((base_addr as *mut u8).add(i)) = 0xfa;
+    //     }
+    // }
 
     let mem_desc_array = mem_desc!(boot_services);
     let map_key = mem_desc_array.map_key();
     // There must be no stdout between get_memorymap and exit_boot_services
     let _status = boot_services
-        .exit_boot_services(image_handle, map_key)
+        .exit_boot_services(image_handle, map_key + 1)
         .unwrap();
 
     loop_with_hlt();

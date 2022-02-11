@@ -29,3 +29,6 @@ run: ready
 		-drive if=pflash,format=raw,file=ovmf/lemola_ovmf_vars.fd  \
 		-drive media=disk,format=raw,file=fat:rw:mnt \
 		-monitor stdio
+
+fix:
+	git checkout 56685e2ed7b72ed1b325402b37fb5a04fff3ace7 ovmf/lemola_ovmf_vars.fd

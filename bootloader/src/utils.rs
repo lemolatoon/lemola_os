@@ -9,6 +9,16 @@ pub fn loop_with_hlt() -> ! {
 }
 
 #[macro_export]
+macro_rules! root_dir {
+    ($simple_file_system_protocol:expr, $name:ident) => {
+        // in order to make `root_dir` variable live long enough
+        let $name = MaybeUninit::<&EfiFileProtocol>::uninit();
+        let _status = $simple_file_system_protocol.root_dir(&$name);
+        let $name = unsafe { $name.assume_init() };
+    };
+}
+
+#[macro_export]
 macro_rules! dbg {
     ($val:expr $(,)?) => {
         match $val {

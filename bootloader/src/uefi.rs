@@ -279,6 +279,12 @@ impl EfiSimpleTextOutputProtocol {
         status.try_into().unwrap()
     }
 
+    pub fn output_string_utf16(&self, msg_ptr: *const u16) -> EfiStatusCode {
+        let status: EfiStatusCode = (self.output_string)(self, msg_ptr).try_into().unwrap();
+        assert!(status.is_success());
+        status
+    }
+
     pub fn reset(&self, b: bool) -> EfiStatusCode {
         let status = (self.reset)(self, b);
         println!("reset: {:?}", EfiStatusCode::try_from(status));
@@ -312,6 +318,7 @@ pub struct EfiInputKey {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct EfiTime {
     year: u16,
     month: u8,

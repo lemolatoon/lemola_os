@@ -76,20 +76,20 @@ pub struct EfiSimpleFileSystemProtocol {
     revision: u64,
     open_volume: extern "efiapi" fn(
         this: &EfiSimpleFileSystemProtocol,
-        root: &*const EfiFileProtocol,
+        root: *const &EfiFileProtocol,
     ) -> EfiStatus,
 }
 
 impl EfiSimpleFileSystemProtocol {
-    pub fn root_dir(&self) -> &EfiFileProtocol {
-        let root_dir = &MaybeUninit::<EfiFileProtocol>::uninit().as_ptr();
+    pub fn root_dir(&self, root_dir: &MaybeUninit<&EfiFileProtocol>) -> EfiStatusCode {
+        let root_dir = root_dir.as_ptr();
         let status = (self.open_volume)(self, root_dir);
         let status = EfiStatusCode::try_from(status).unwrap();
         if !status.is_success() {
             println!("{:?}", status);
             panic!("open_volume failed");
         }
-        unsafe { (*root_dir).as_ref().expect("EfiFileProtocol is null") }
+        status
     }
 }
 
@@ -98,7 +98,7 @@ pub struct EfiFileProtocol {
     pub revision: u64,
     open: extern "efiapi" fn(
         this: &EfiFileProtocol,
-        new_handle: &*const EfiFileProtocol,
+        new_handle: *const &EfiFileProtocol,
         file_name: *const CHAR16,
         open_mode: u64,
         attributes: u64,
@@ -126,19 +126,40 @@ pub struct EfiFileProtocol {
 impl EfiFileProtocol {
     pub fn open(
         &self,
+        new_handle: &MaybeUninit<&EfiFileProtocol>,
         file_name: &str,
         open_mode: OpenMode,
         attribute: FileAttributes,
-    ) -> &EfiFileProtocol {
-        let protocol = MaybeUninit::<EfiFileProtocol>::uninit().as_ptr();
-        (self.open)(
+    ) -> EfiStatusCode {
+        let status: EfiStatusCode = (self.open)(
             self,
-            &protocol,
+            new_handle.as_ptr(),
             dyn_utf16_ptr!(file_name),
             open_mode.into(),
             attribute.into(),
-        );
-        unsafe { protocol.as_ref().expect("EfiFileProtocol was null") }
+        )
+        .try_into()
+        .unwrap();
+        if !status.is_success() {
+            println!("{:?}", status);
+        }
+        status
+    }
+
+    pub fn get_info(&self, buffer_size: &mut usize, buffer: &[MaybeUninit<u8>]) -> EfiStatusCode {
+        let status: EfiStatusCode = (self.get_info)(
+            self,
+            &EFI_FILE_INFO_GUID,
+            &buffer_size,
+            buffer.as_ptr().cast(),
+        )
+        .try_into()
+        .unwrap();
+        if !status.is_success() {
+            println!("{:?}", status);
+            panic!("get_info failed");
+        }
+        status
     }
 }
 
@@ -185,6 +206,7 @@ impl Into<u64> for FileAttributes {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct EfiFileInfo {
     size: u64,
     file_size: u64,
@@ -193,5 +215,5 @@ pub struct EfiFileInfo {
     last_access_time: EfiTime,
     modification_time: EfiTime,
     attribute: u64,
-    filename: CHAR16,
+    pub filename: *const CHAR16,
 }

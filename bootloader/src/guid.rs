@@ -6,6 +6,10 @@ pub const EFI_SIMPLE_FILE_SYSTEM_PROTOCOL_GUID: EfiGuid = EfiGuid::new(
     0x964e5b22, 0x6459, 0x11d2, 0x8e, 0x39, 0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b,
 );
 
+pub const EFI_FILE_INFO_GUID: EfiGuid = EfiGuid::new(
+    0x09576e92, 0x6d3f, 0x11d2, 0x8e, 0x39, 0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b,
+);
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct EfiGuid {
@@ -30,7 +34,7 @@ macro_rules! impl_guid {
                 &$e
             }
         }
-    } 
+    };
 }
 
 pub trait HasGuid {
@@ -38,7 +42,6 @@ pub trait HasGuid {
 }
 
 impl EfiGuid {
-
     const fn new(
         a: u32,
         b: u16,
