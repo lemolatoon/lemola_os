@@ -28,3 +28,4 @@ run: ready
 		-drive if=pflash,format=raw,readonly,file=ovmf/OVMF_CODE.fd \
 		-drive if=pflash,format=raw,file=ovmf/lemola_ovmf_vars.fd  \
 		-drive media=disk,format=raw,file=fat:rw:mnt \
+		-monitor stdio

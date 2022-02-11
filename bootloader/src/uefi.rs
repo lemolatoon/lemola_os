@@ -1,6 +1,7 @@
 use core::ffi::c_void;
 use core::fmt::Error;
 
+use crate::dyn_utf16_ptr;
 use crate::guid::*;
 use crate::println;
 use crate::protocols::EfiGraphicsOutputProtocol;
@@ -264,21 +265,16 @@ impl EfiBootServices {
         let ptr = core::ptr::null();
         println!("{:X?}", T::get_guid());
         (self.locate_protocol)(T::get_guid(), core::ptr::null(), &ptr);
-        unsafe {
-            ptr.cast::<T>()
-                .as_ref()
-                .expect("provided pointer was null")
-        }
+        unsafe { ptr.cast::<T>().as_ref().expect("provided pointer was null") }
     }
 }
 
 impl EfiSimpleTextOutputProtocol {
     pub fn output_string(&self, msg: &str) -> EfiStatusCode {
-        use heapless::consts::*;
-        use heapless::*;
         let status = (self.output_string)(
             self,
-            msg.encode_utf16().collect::<Vec<u16, U4096>>().as_ptr(),
+            // msg.encode_utf16().collect::<Vec<u16, U4096>>().as_ptr(),
+            dyn_utf16_ptr!(msg),
         );
         status.try_into().unwrap()
     }
@@ -421,6 +417,10 @@ impl EfiStatusCode {
             EfiWarnFileSystem => false,
             EfiWarnResetRequired => false,
         }
+    }
+
+    pub fn is_success(&self) -> bool {
+        matches!(self, &EfiStatusCode::EfiSuccess)
     }
 }
 
