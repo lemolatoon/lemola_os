@@ -150,7 +150,7 @@ impl EfiFileProtocol {
         let status: EfiStatusCode = (self.get_info)(
             self,
             &EFI_FILE_INFO_GUID,
-            &buffer_size,
+            buffer_size,
             buffer.as_ptr().cast(),
         )
         .try_into()
@@ -208,12 +208,12 @@ impl Into<u64> for FileAttributes {
 #[repr(C)]
 #[derive(Debug)]
 pub struct EfiFileInfo {
-    size: u64,
+    pub size: u64,
     pub file_size: u64,
     physical_size: u64,
     create_time: EfiTime,
     last_access_time: EfiTime,
     modification_time: EfiTime,
     attribute: u64,
-    pub filename: *const CHAR16,
+    pub filename: [CHAR16; 12],
 }

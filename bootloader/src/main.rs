@@ -7,6 +7,7 @@ use core::arch::asm;
 use core::char::decode_utf16;
 use core::mem::size_of;
 use core::mem::MaybeUninit;
+use core::ops::Add;
 use core::panic::PanicInfo;
 use core::ptr::slice_from_raw_parts;
 use core::ptr::slice_from_raw_parts_mut;
@@ -18,6 +19,7 @@ use uefi_lemola_os::root_dir;
 use uefi_lemola_os::utils::loop_with_hlt;
 use uefi_lemola_os::{mem_desc, println};
 use uefi_lemola_os::{uefi::*, uefi_utils::*};
+use utf16_literal::utf16;
 
 #[no_mangle]
 pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSystemTable) {
@@ -54,6 +56,7 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
     let status = system_table.output_protocol().reset(true);
     println!("{:?}", status);
 
+    // start booting kernel
     let protocol = boot_services.locate_protocol::<EfiSimpleFileSystemProtocol>();
     let root_dir = MaybeUninit::<&EfiFileProtocol>::uninit();
     protocol.root_dir(&root_dir);
@@ -115,6 +118,19 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
             .expect("FileInfo was null")
     };
 
+    println!("{:X?}", file_info);
+    // TODO: utf8でencodeされてしまっているから、utf16でget_info関数にデータを渡せるように修正する
+    let c = file_info.filename;
+    // let str: [u16; 12] = unsafe { *((c as *const u16).cast::<[u16; 12]>()) };
+    // println!("{:X?}", str);
+    loop {}
+    let size = file_info.size;
+    println!(
+        "file_info.size: {}, size_of::<EfiFileInfo>: {}",
+        file_info.size,
+        size_of::<EfiFileInfo>()
+    );
+
     let kernel_file_size = file_info.file_size;
 
     const kernel_base_addr: u64 = 0x100000;
@@ -130,28 +146,15 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
     println!("\n{}", base_addr);
     println!("{}", size);
     dbg!("before jump");
-    let res = f();
+    // let res = f();
     dbg!("after jump");
-    assert_eq!(res, 32);
+    // assert_eq!(res, 32);
     println!("{}", f());
     panic!("finished");
 
     // unsafe { asm!("jmp $0x101120") };
     println!("{:?}", file_info);
-    assert!(!file_info.filename.is_null());
-    dbg!(0);
-    println!("{:p}", file_info.filename);
-    println!("{:X}", unsafe { *(file_info.filename) });
     dbg!(1);
-    for i in 0..FILE_NAME_LEN {
-        dbg!(2);
-        let c = unsafe { file_info.filename.add(i).as_ref().unwrap() };
-        dbg!(3);
-        println!("{}", c);
-        if *c == 0 {
-            break;
-        }
-    }
     dbg!(4);
     // let decoded = unsafe {
     //     decode_utf16(
