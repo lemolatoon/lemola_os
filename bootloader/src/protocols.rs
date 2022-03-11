@@ -1,6 +1,7 @@
 use crate::dyn_utf16_ptr;
 use crate::guid::*;
 use crate::println;
+use crate::unwrap_success;
 use core::ffi::c_void;
 use core::mem::MaybeUninit;
 
@@ -145,9 +146,7 @@ impl EfiFileProtocol {
         )
         .try_into()
         .unwrap();
-        if !status.is_success() {
-            println!("{:?}", status);
-        }
+        unwrap_success!(status);
         status
     }
 

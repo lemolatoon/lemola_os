@@ -4,22 +4,16 @@
 #![feature(maybe_uninit_uninit_array)]
 
 use core::arch::asm;
-use core::char::decode_utf16;
 use core::mem::size_of;
 use core::mem::MaybeUninit;
-use core::ops::Add;
 use core::panic::PanicInfo;
-use core::ptr::slice_from_raw_parts;
-use core::ptr::slice_from_raw_parts_mut;
-use heapless::String;
 use uefi_lemola_os::dbg;
-use uefi_lemola_os::dyn_utf16_ptr;
 use uefi_lemola_os::protocols::*;
 use uefi_lemola_os::root_dir;
+use uefi_lemola_os::unwrap_success;
 use uefi_lemola_os::utils::loop_with_hlt;
 use uefi_lemola_os::{mem_desc, println};
 use uefi_lemola_os::{uefi::*, uefi_utils::*};
-use utf16_literal::utf16;
 
 #[no_mangle]
 pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSystemTable) {
@@ -52,7 +46,7 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
     dbg!(base_addr);
 
     let status = system_table.output_protocol().reset(true);
-    assert!(status.is_success());
+    unwrap_success!(status);
 
     // start booting kernel
     let protocol = boot_services.locate_protocol::<EfiSimpleFileSystemProtocol>();
@@ -77,12 +71,15 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
     }
     println!("=======================================");
     let kernel_file = MaybeUninit::<&EfiFileProtocol>::uninit();
+    const FILE_NAME: &str = "\\kernel.elf\0";
     let status = root_dir.open(
         &kernel_file,
-        "\\kernel.elf",
+        FILE_NAME,
         OpenMode::EfiFileModeRead,
         FileAttributes::EfiFileReadOnly,
     );
+    println!("{:?}", status);
+    unwrap_success!(status);
     let kernel_file = unsafe { kernel_file.assume_init() };
     assert_ne!(
         root_dir as *const EfiFileProtocol,
@@ -101,13 +98,13 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
         }
     }
     // const FILE_NAME: &str = "\\a.txt\0";
-    const FILE_NAME: &str = "\\kernel.elf\0";
     const FILE_NAME_LEN: usize = FILE_NAME.len();
     assert_eq!(FILE_NAME_LEN, 12);
     const FILE_INFO_SIZE: usize = size_of::<EfiFileInfo>() + size_of::<u16>() * FILE_NAME_LEN;
     let file_info_buffer: [MaybeUninit<u8>; FILE_INFO_SIZE] = MaybeUninit::uninit_array();
     let mut buffer_size = FILE_INFO_SIZE;
-    kernel_file.get_info(&mut buffer_size, &file_info_buffer);
+    let status = kernel_file.get_info(&mut buffer_size, &file_info_buffer);
+    unwrap_success!(status);
     let file_info = unsafe {
         file_info_buffer
             .as_ptr()
@@ -117,6 +114,7 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
     };
 
     println!("{:X?}", file_info);
+    loop_with_hlt();
     // TODO: utf8でencodeされてしまっているから、utf16でget_info関数にデータを渡せるように修正する
     let c = file_info.filename;
     // let str: [u16; 12] = unsafe { *((c as *const u16).cast::<[u16; 12]>()) };
@@ -131,7 +129,7 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
     let kernel_file_size = file_info.file_size;
 
     let status = system_table.output_protocol().reset(true);
-    assert!(status.is_success());
+    unwrap_success!(status);
     //
     let protocol = system_table
         .get_boot_services()
@@ -155,7 +153,7 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
         (kernel_file_size + 0xfff) / 0x1000,
         &kernel_base_addr,
     );
-    assert!(status.is_success());
+    unwrap_success!(status);
     let kernel_file_size = kernel_file_size as usize;
     dbg!("before read");
     let status = (kernel_file.read)(
@@ -165,7 +163,7 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
     );
     dbg!("after read");
     let status: EfiStatusCode = status.try_into().unwrap();
-    assert!(status.is_success());
+    unwrap_success!(status);
 
     let kernel_entry_addr: u64 = kernel_base_addr + 24;
     let kernel_entry_addr = 0x101130;
@@ -212,6 +210,6 @@ fn init(system_table: &'static EfiSystemTable) {
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    // println!("{:?}", info);
+    println!("{:?}", info);
     loop_with_hlt()
 }

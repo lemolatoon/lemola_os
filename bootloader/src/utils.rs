@@ -80,3 +80,14 @@ macro_rules! dyn_utf16_ptr {
         }
     };
 }
+
+#[macro_export]
+macro_rules! unwrap_success {
+    ($i:ident) => {
+        if let EfiStatusCode::EfiSuccess = $i {
+            EfiStatusCode::EfiSuccess
+        } else {
+            panic!("EfiStatus: {:?}", $i);
+        }
+    };
+}

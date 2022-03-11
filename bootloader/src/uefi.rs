@@ -7,6 +7,7 @@ use crate::println;
 use crate::protocols::EfiGraphicsOutputProtocol;
 use crate::uefi_utils::MemoryDescriptorArray;
 use crate::uefi_utils::MemoryMap;
+use crate::unwrap_success;
 
 type CHAR16 = u16;
 pub type EfiStatus = usize;
@@ -268,7 +269,8 @@ impl EfiBootServices {
         size: usize,
     ) -> MemoryDescriptorArray {
         let mut map = MemoryMap::new(memmap_buf_ptr, size);
-        self.get_memory_map(size, &mut map).unwrap();
+        let status = self.get_memory_map(size, &mut map).unwrap();
+        unwrap_success!(status);
 
         MemoryDescriptorArray::new(
             memmap_buf_ptr,
@@ -468,7 +470,7 @@ impl EfiStatusCode {
         matches!(self, &EfiStatusCode::EfiSuccess)
     }
 
-    fn unwrap_success(&self) -> Self {
+    pub fn unwrap_success(&self) -> Self {
         if let Self::EfiSuccess = *self {
             Self::EfiSuccess
         } else {
