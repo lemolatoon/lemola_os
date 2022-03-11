@@ -18,7 +18,7 @@ impl core::fmt::Write for Writer {
             output_protcol.output_string(s);
             return Ok(());
         }
-        Err(Error)
+        Ok(())
     }
 }
 

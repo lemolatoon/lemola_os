@@ -284,11 +284,9 @@ impl EfiBootServices {
         map_key: usize,
     ) -> Result<EfiStatusCode, Error> {
         let status = (self.exit_boot_services)(image_handle, map_key);
-        println!(
-            "exit_boot_services: {:?}",
-            EfiStatusCode::try_from(status).unwrap()
-        );
-        Ok(status.try_into().unwrap())
+        let status: EfiStatusCode = status.try_into().unwrap();
+        assert!(status.is_success());
+        Ok(status)
     }
 
     pub fn graphics_output_protocol(&self) -> &EfiGraphicsOutputProtocol {
@@ -332,7 +330,7 @@ impl EfiSimpleTextOutputProtocol {
     }
 
     pub fn clear_screen(&self) -> EfiStatusCode {
-        let status = (self.clear_screen)(self);
+        let status = (self.clear_screen)(&self);
         status.try_into().unwrap()
     }
 
@@ -468,6 +466,14 @@ impl EfiStatusCode {
 
     pub fn is_success(&self) -> bool {
         matches!(self, &EfiStatusCode::EfiSuccess)
+    }
+
+    fn unwrap_success(&self) -> Self {
+        if let Self::EfiSuccess = *self {
+            Self::EfiSuccess
+        } else {
+            panic!("EfiStatus: {:?}", self);
+        }
     }
 }
 

@@ -105,7 +105,12 @@ pub struct EfiFileProtocol {
     ) -> EfiStatus,
     close: FnPtr,
     delete: FnPtr,
-    read: FnPtr,
+    pub read: extern "efiapi" fn(
+        this: &EfiFileProtocol,
+        buffer_size: &usize,
+        buffer: *const c_void,
+    ) -> EfiStatus,
+    // TODO: change to c_void
     write: FnPtr,
     get_position: FnPtr,
     set_position: FnPtr,

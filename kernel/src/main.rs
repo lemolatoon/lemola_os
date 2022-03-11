@@ -4,17 +4,18 @@ use core::arch::asm;
 use core::panic::PanicInfo;
 
 #[no_mangle]
-extern "C" fn kernel_main() {
-    let base_addr = 1921024;
-    let size = 1921024;
+extern "C" fn kernel_main() -> usize {
+    loop {
+        unsafe { asm!("hlt") };
+    }
+    let base_addr: u64 = 80000000;
+    let size = 0x1D5000;
     for i in 0..size / 4 {
         unsafe {
             *((base_addr as *mut u8).add(i)) = 0xff;
         }
     }
-    loop {
-        unsafe { asm!("hlt") };
-    }
+    loop {}
 }
 
 #[panic_handler]

@@ -51,10 +51,8 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
     }
     dbg!(base_addr);
 
-    let status = system_table.output_protocol().clear_screen();
-    println!("{:?}", status);
     let status = system_table.output_protocol().reset(true);
-    println!("{:?}", status);
+    assert!(status.is_success());
 
     // start booting kernel
     let protocol = boot_services.locate_protocol::<EfiSimpleFileSystemProtocol>();
@@ -123,7 +121,6 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
     let c = file_info.filename;
     // let str: [u16; 12] = unsafe { *((c as *const u16).cast::<[u16; 12]>()) };
     // println!("{:X?}", str);
-    loop {}
     let size = file_info.size;
     println!(
         "file_info.size: {}, size_of::<EfiFileInfo>: {}",
@@ -133,63 +130,76 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
 
     let kernel_file_size = file_info.file_size;
 
-    const kernel_base_addr: u64 = 0x100000;
-    const kernel_entry_addr: u64 = 0x101120;
-    boot_services.allocate_pages(
+    let status = system_table.output_protocol().reset(true);
+    assert!(status.is_success());
+    //
+    let protocol = system_table
+        .get_boot_services()
+        .locate_protocol::<EfiGraphicsOutputProtocol>();
+    let base_addr = protocol.mode.frame_buffer_base;
+    let size = protocol.mode.frame_buffer_size;
+    println!("base: {:X}, size: {:X}", base_addr, size);
+    /*
+    for i in 0..size / 4 {
+        unsafe {
+            *((base_addr as *mut u8).add(i)) = 0xff;
+        }
+    }
+    */
+
+    let kernel_base_addr: u64 = 0x100000;
+    let kernel_entry_addr: u64 = 0x101120;
+    let status = boot_services.allocate_pages(
         EfiAllocateType::AllocateAddress,
         EfiLoaderData,
         (kernel_file_size + 0xfff) / 0x1000,
         &kernel_base_addr,
     );
-    let f: extern "C" fn() -> usize =
-        unsafe { core::mem::transmute(kernel_entry_addr as *const u8) };
+    assert!(status.is_success());
+    let kernel_file_size = kernel_file_size as usize;
+    dbg!("before read");
+    let status = (kernel_file.read)(
+        kernel_file,
+        &kernel_file_size,
+        (kernel_base_addr as *const u8).cast(),
+    );
+    dbg!("after read");
+    let status: EfiStatusCode = status.try_into().unwrap();
+    assert!(status.is_success());
+
+    let kernel_entry_addr: u64 = kernel_base_addr + 24;
+    let kernel_entry_addr = 0x101130;
+    let f: extern "C" fn() = unsafe { core::mem::transmute(kernel_entry_addr as *const u8) };
+    println!("{:p}", f as *const u8);
     println!("\n{}", base_addr);
     println!("{}", size);
     dbg!("before jump");
-    // let res = f();
+    let mem_desc_array = mem_desc!(boot_services);
+    for desc in mem_desc_array.iter() {
+        if desc.physical_start + desc.number_of_pages * 1024 > 0x72a401c {
+            break;
+        }
+        println!("{}", desc);
+    }
+    let mem_desc_array = mem_desc!(boot_services);
+    let map_key = mem_desc_array.map_key();
+    // There must be no stdout between get_memorymap and exit_boot_services
+    let _status = boot_services.exit_boot_services(image_handle, map_key);
+    //let res = f();
+    loop {
+        unsafe { asm!("add rax, 1") }
+    }
     dbg!("after jump");
     // assert_eq!(res, 32);
-    println!("{}", f());
-    panic!("finished");
-
-    // unsafe { asm!("jmp $0x101120") };
-    println!("{:?}", file_info);
-    dbg!(1);
-    dbg!(4);
-    // let decoded = unsafe {
-    //     decode_utf16(
-    //         slice_from_raw_parts(file_info.filename, FILE_NAME_LEN)
-    //             .as_ref()
-    //             .unwrap()
-    //             .iter()
-    //             .map(|i| {
-    //                 print!("hello");
-    //                 *i
-    //             }),
-    //     )
-    //     .map(|r| r.unwrap())
-    // };
-    // println!();
-    // for c in decoded {
-    //     print!("{}", c);
-    // }
-    // println!("{:?}", status);
-    assert!(status.is_success());
-
-    // for i in size / 4..size / 5 {
-    //     unsafe {
-    //         *((base_addr as *mut u8).add(i)) = 0xfa;
-    //     }
-    // }
 
     let mem_desc_array = mem_desc!(boot_services);
     let map_key = mem_desc_array.map_key();
     // There must be no stdout between get_memorymap and exit_boot_services
     let _status = boot_services
-        .exit_boot_services(image_handle, map_key + 1)
+        .exit_boot_services(image_handle, map_key)
         .unwrap();
 
-    loop_with_hlt();
+    loop {}
 }
 
 fn init(system_table: &'static EfiSystemTable) {
@@ -202,6 +212,6 @@ fn init(system_table: &'static EfiSystemTable) {
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    println!("{:?}", info);
+    // println!("{:?}", info);
     loop_with_hlt()
 }
