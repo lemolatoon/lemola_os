@@ -130,12 +130,12 @@ pub struct EfiFileProtocol {
 }
 
 impl EfiFileProtocol {
-    pub fn open(
+    pub fn open<AsOpenMode: Into<u64>, AsFileAttributes: Into<u64>>(
         &self,
         new_handle: &MaybeUninit<&EfiFileProtocol>,
         file_name: &str,
-        open_mode: OpenMode,
-        attribute: FileAttributes,
+        open_mode: AsOpenMode,
+        attribute: AsFileAttributes,
     ) -> EfiStatusCode {
         let status: EfiStatusCode = (self.open)(
             self,
@@ -181,6 +181,22 @@ impl Into<u64> for OpenMode {
             OpenMode::EfiFileModeWrite => 0x0000000000000002,
             OpenMode::EfiFiileModeCreate => 0x8000000000000000,
         }
+    }
+}
+
+impl OpenMode {
+    pub fn mix(read: bool, write: bool, create: bool) -> u64 {
+        let mut res = 0;
+        if read {
+            res |= 0x1;
+        }
+        if write {
+            res |= 0x2;
+        }
+        if create {
+            res |= 0x8000000000000000;
+        }
+        res
     }
 }
 

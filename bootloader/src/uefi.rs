@@ -268,7 +268,7 @@ impl EfiBootServices {
         memmap_buf_ptr: *mut T,
         size: usize,
     ) -> MemoryDescriptorArray {
-        let mut map = MemoryMap::new(memmap_buf_ptr, size);
+        let mut map = MemoryMap::_new(memmap_buf_ptr, size);
         let status = self.get_memory_map(size, &mut map).unwrap();
         unwrap_success!(status);
 

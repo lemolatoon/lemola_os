@@ -47,6 +47,29 @@ macro_rules! mem_desc {
     }};
 }
 
+#[macro_export]
+macro_rules! mem_map {
+    ($boot_services:expr) => {{
+        const SIZE: usize = 4096 * 4;
+        use core::mem::MaybeUninit;
+        let mut memmap_buf: MaybeUninit<[u8; SIZE]> = MaybeUninit::uninit();
+        let mut map = MemoryMap::new(&mut memmap_buf, SIZE);
+        let status = $boot_services.get_memory_map(SIZE, &mut map).unwrap();
+        unwrap_success!(status);
+        map
+    }};
+}
+
+trait BitOr {
+    fn bit_or(&mut self, other: u64);
+}
+
+// impl BitOr for u64 {
+//     fn bit_or(&mut self, other: u64) {
+//         self = (*self) | other;
+//     }
+// }
+
 #[doc(hidden)]
 pub fn _print(args: core::fmt::Arguments) {
     use core::fmt::Write;
@@ -66,7 +89,7 @@ pub struct MemoryMap {
 }
 
 impl MemoryMap {
-    pub fn new<T>(memmap_buf_ptr: *mut T, size: usize) -> Self {
+    pub fn _new<T>(memmap_buf_ptr: *mut T, size: usize) -> Self {
         // let mut memmap_buf = [0u8; 4096 * 4];
         Self {
             memory_map_size: size,
@@ -75,6 +98,23 @@ impl MemoryMap {
             descriptor_size: 0,
             descriptor_version: 0,
         }
+    }
+
+    pub fn new<T>(memmap_buf: &mut T, size: usize) -> Self {
+        MemoryMap::_new(memmap_buf as *mut T, size)
+    }
+
+    pub fn iter(self) -> MemoryDescriptorIterator {
+        self.array().iter()
+    }
+
+    pub fn array(&self) -> MemoryDescriptorArray {
+        MemoryDescriptorArray::new(
+            self.memory_map,
+            self.descriptor_size,
+            self.memory_map_size,
+            self.map_key,
+        )
     }
 }
 

@@ -1,4 +1,6 @@
-use core::arch::asm;
+use core::{arch::asm, mem::MaybeUninit};
+
+use crate::{protocols::EfiFileProtocol, uefi::EfiStatusCode, uefi_utils::MemoryMap};
 
 pub fn loop_with_hlt() -> ! {
     loop {
@@ -6,6 +8,18 @@ pub fn loop_with_hlt() -> ! {
             asm! {"hlt"};
         }
     }
+}
+
+pub fn save_memory_map(map: &MemoryMap, file: &EfiFileProtocol) -> Result<(), EfiStatusCode> {
+    let buf: [MaybeUninit<u8>; 256] = MaybeUninit::uninit_array();
+    let len;
+
+    let header: &str = "Index, Type, Type(name), PhysicalStart, NumberOfPages, Attribute\n";
+    len = header.len();
+    unimplemented!();
+    // Ref: p.59
+
+    Err(EfiStatusCode::EfiUnsupported)
 }
 
 #[macro_export]

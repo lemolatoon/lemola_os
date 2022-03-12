@@ -8,12 +8,15 @@ use core::mem::size_of;
 use core::mem::MaybeUninit;
 use core::panic::PanicInfo;
 use uefi_lemola_os::dbg;
+use uefi_lemola_os::mem_map;
 use uefi_lemola_os::protocols::*;
 use uefi_lemola_os::root_dir;
 use uefi_lemola_os::unwrap_success;
 use uefi_lemola_os::utils::loop_with_hlt;
+use uefi_lemola_os::utils::save_memory_map;
 use uefi_lemola_os::{mem_desc, println};
 use uefi_lemola_os::{uefi::*, uefi_utils::*};
+use utf16_literal::utf16;
 
 #[no_mangle]
 pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSystemTable) {
@@ -22,7 +25,8 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
 
     let boot_services = system_table.get_boot_services();
 
-    let mem_desc_array = mem_desc!(boot_services);
+    // let mem_desc_array = mem_desc!(boot_services);
+    let mem_desc_array = mem_map!(boot_services).array();
 
     use uefi_lemola_os::uefi::MemoryType::*;
     let iter = mem_desc_array
@@ -55,6 +59,20 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
     let root_dir = unsafe { root_dir.assume_init() };
     println!("{:p}", root_dir);
     root_dir!(protocol, root_dir);
+
+    // save memory map start
+    let memmap_file: MaybeUninit<&EfiFileProtocol> = MaybeUninit::uninit();
+
+    root_dir.open(
+        &memmap_file,
+        "memmap",
+        OpenMode::mix(true, true, true),
+        0u64,
+    );
+    let map = mem_map!(boot_services);
+
+    save_memory_map(&map, unsafe { memmap_file.assume_init() }).unwrap();
+    // save memory map end
 
     use uefi_lemola_os::print;
     unsafe {
