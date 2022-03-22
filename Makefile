@@ -41,3 +41,12 @@ run: ready
 
 fix:
 	git checkout 56685e2ed7b72ed1b325402b37fb5a04fff3ace7 ovmf/lemola_ovmf_vars.fd
+
+
+.PHONY: docker_build
+docker_build:
+	docker build -t lemola_os .devcontainer/
+
+.PHONY: docker_run
+docker_run:
+	docker run -v `pwd`:/lemola_os -it lemola_os:latest /bin/bash

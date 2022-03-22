@@ -29,4 +29,3 @@ RUN apt-get install less
 RUN apt-get install qemu-kvm -y
 
 ENV DISPLAY=host.docker.internal:0
-
