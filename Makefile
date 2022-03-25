@@ -2,12 +2,12 @@ build: kernel.elf uefi_lemola_os.efi
 
 uefi_lemola_os.efi:
 	cd bootloader && \
-	cargo +nightly build && \
+	cargo build && \
 	cd ..
 
 kernel.elf:
 	cd kernel && \
-	rustup run nightly cargo build && \
+	cargo build && \
 	cd ..
 
 _kernel.elf:
@@ -40,7 +40,9 @@ run: ready
 		-monitor stdio
 
 fix:
-	git checkout 56685e2ed7b72ed1b325402b37fb5a04fff3ace7 ovmf/lemola_ovmf_vars.fd
+	# git checkout 56685e2ed7b72ed1b325402b37fb5a04fff3ace7 ovmf/lemola_ovmf_vars.fd
+	# git checkout 1bf96c63e2b090910f9988fa6afd1ccf01b51a59 ovmf/lemola_ovmf_vars.fd
+	git checkout 90a30e645418ac235b63ee9f1717babca336231b ovmf/lemola_ovmf_vars.fd
 
 
 .PHONY: docker_build

@@ -1,6 +1,7 @@
 use core::{arch::asm, mem::MaybeUninit};
 
-use crate::{protocols::EfiFileProtocol, uefi::EfiStatusCode, uefi_utils::MemoryMap};
+use crate::unwrap_success;
+use crate::{println, protocols::EfiFileProtocol, uefi::EfiStatusCode, uefi_utils::MemoryMap};
 
 pub fn loop_with_hlt() -> ! {
     loop {
@@ -12,10 +13,18 @@ pub fn loop_with_hlt() -> ! {
 
 pub fn save_memory_map(map: &MemoryMap, file: &EfiFileProtocol) -> Result<(), EfiStatusCode> {
     let buf: [MaybeUninit<u8>; 256] = MaybeUninit::uninit_array();
-    let len;
+    let mut len;
 
     let header: &str = "Index, Type, Type(name), PhysicalStart, NumberOfPages, Attribute\n";
     len = header.len();
+    let status = file.write(&mut len, &buf);
+    unwrap_success!(status);
+    println!(
+        "map.memory_map: *const _ = {:p}, map.memory_map_size = {}",
+        map.memory_map, map.memory_map_size
+    );
+    let iter = map.iter();
+    for mem_desc in iter {}
     unimplemented!();
     // Ref: p.59
 

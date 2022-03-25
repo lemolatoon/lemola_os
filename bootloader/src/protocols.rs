@@ -112,7 +112,11 @@ pub struct EfiFileProtocol {
         buffer: *const c_void,
     ) -> EfiStatus,
     // TODO: change to c_void
-    write: FnPtr,
+    write: extern "efiapi" fn(
+        this: &EfiFileProtocol,
+        buffer_size: &mut usize,
+        buffer: &c_void,
+    ) -> EfiStatus,
     get_position: FnPtr,
     set_position: FnPtr,
     get_info: extern "efiapi" fn(
@@ -147,6 +151,15 @@ impl EfiFileProtocol {
         .try_into()
         .unwrap();
         unwrap_success!(status);
+        status
+    }
+
+    pub fn write(&self, buffer_size: &mut usize, buffer: &[MaybeUninit<u8>]) -> EfiStatusCode {
+        let status: EfiStatusCode = (self.write)(self, buffer_size, unsafe {
+            (buffer as *const _ as *const c_void).as_ref().unwrap()
+        })
+        .try_into()
+        .unwrap();
         status
     }
 

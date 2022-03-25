@@ -104,7 +104,7 @@ impl MemoryMap {
         MemoryMap::_new(memmap_buf as *mut T, size)
     }
 
-    pub fn iter(self) -> MemoryDescriptorIterator {
+    pub fn iter(&self) -> MemoryDescriptorIterator {
         self.array().iter()
     }
 
