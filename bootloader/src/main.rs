@@ -4,9 +4,12 @@
 #![feature(maybe_uninit_uninit_array)]
 
 use core::arch::asm;
+use core::borrow::BorrowMut;
 use core::mem::size_of;
 use core::mem::MaybeUninit;
 use core::panic::PanicInfo;
+use core::pin::Pin;
+use core::ptr::drop_in_place;
 use uefi_lemola_os::dbg;
 use uefi_lemola_os::mem_map;
 use uefi_lemola_os::protocols::*;
@@ -14,6 +17,7 @@ use uefi_lemola_os::root_dir;
 use uefi_lemola_os::unwrap_success;
 use uefi_lemola_os::utils::loop_with_hlt;
 use uefi_lemola_os::utils::save_memory_map;
+use uefi_lemola_os::utils::UnuseableBuffer;
 use uefi_lemola_os::{mem_desc, println};
 use uefi_lemola_os::{uefi::*, uefi_utils::*};
 use utf16_literal::utf16;
@@ -25,7 +29,24 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
 
     let boot_services = system_table.get_boot_services();
 
-    // let mem_desc_array = mem_desc!(boot_services);
+    let mem_desc_array = mem_desc!(boot_services);
+    const MEMORY_MAP_BUFFER_SIZE: usize = 4096 * 4;
+    let buffer = unsafe { MaybeUninit::<[u8; MEMORY_MAP_BUFFER_SIZE]>::uninit().assume_init() };
+    let buffer = &buffer;
+
+    let mem_desc_iter = get_mem_map_array(boot_services, buffer).unwrap();
+    let buffer = UnuseableBuffer::new(buffer);
+    // now you cannot read values in buffer unless you do not use mem_desc_iter
+    for desc in mem_desc_iter {
+        println!("{}", desc);
+    }
+
+    let map_key = boot_services.get_memory_map_key().unwrap();
+    boot_services
+        .exit_boot_services(image_handle, map_key)
+        .unwrap();
+    loop_with_hlt();
+
     let mem_desc_array = mem_map!(boot_services).array();
 
     use uefi_lemola_os::uefi::MemoryType::*;
@@ -60,6 +81,7 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
     println!("{:p}", root_dir);
     root_dir!(protocol, root_dir);
 
+    /*
     // save memory map start
     let memmap_file: MaybeUninit<&EfiFileProtocol> = MaybeUninit::uninit();
 
@@ -73,6 +95,7 @@ pub extern "C" fn efi_main(image_handle: EfiHandle, system_table: &'static EfiSy
 
     save_memory_map(&map, unsafe { memmap_file.assume_init() }).unwrap();
     // save memory map end
+    */
 
     use uefi_lemola_os::print;
     unsafe {

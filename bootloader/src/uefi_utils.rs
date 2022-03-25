@@ -1,6 +1,7 @@
-use crate::uefi::*;
+use crate::{uefi::*, unwrap_success};
 use core::cell::Cell;
 use core::fmt::Error;
+use core::mem::MaybeUninit;
 
 pub static mut WRITER: Writer = Writer {
     output_protocol: Cell::new(None),
@@ -60,6 +61,22 @@ macro_rules! mem_map {
     }};
 }
 
+const MEMORY_MAP_BUFFER_SIZE: usize = 4096 * 4;
+pub fn get_mem_map_array<'buf>(
+    boot_services: &EfiBootServices,
+    memmap_buf: &'buf [u8],
+) -> Result<impl Iterator<Item = &'buf EfiMemoryDescriptor>, EfiStatusCode> {
+    let mut map = MemoryMap::new(memmap_buf, MEMORY_MAP_BUFFER_SIZE);
+    let status = boot_services
+        .get_memory_map(MEMORY_MAP_BUFFER_SIZE, &mut map)
+        .unwrap();
+    if status.is_success() {
+        Ok(map.array().iter())
+    } else {
+        Err(status)
+    }
+}
+
 trait BitOr {
     fn bit_or(&mut self, other: u64);
 }
@@ -89,7 +106,7 @@ pub struct MemoryMap {
 }
 
 impl MemoryMap {
-    pub fn _new<T>(memmap_buf_ptr: *mut T, size: usize) -> Self {
+    pub fn _new<T: ?Sized>(memmap_buf_ptr: *mut T, size: usize) -> Self {
         // let mut memmap_buf = [0u8; 4096 * 4];
         Self {
             memory_map_size: size,
@@ -100,8 +117,8 @@ impl MemoryMap {
         }
     }
 
-    pub fn new<T>(memmap_buf: &mut T, size: usize) -> Self {
-        MemoryMap::_new(memmap_buf as *mut T, size)
+    pub fn new<T: ?Sized>(memmap_buf: &T, size: usize) -> Self {
+        MemoryMap::_new(memmap_buf as *const T as *mut T, size)
     }
 
     pub fn iter(&self) -> MemoryDescriptorIterator {
@@ -158,21 +175,23 @@ impl MemoryDescriptorArray {
         self.map_key
     }
 
-    pub fn iter(self) -> MemoryDescriptorIterator {
-        MemoryDescriptorIterator {
+    pub fn iter<'buf>(self) -> MemoryDescriptorIterator<'buf> {
+        MemoryDescriptorIterator::<'_> {
             mem_desc_array: self,
             index: 0,
+            _lifetime: core::marker::PhantomData::default(),
         }
     }
 }
 
-pub struct MemoryDescriptorIterator {
+pub struct MemoryDescriptorIterator<'buf> {
     mem_desc_array: MemoryDescriptorArray,
     index: usize,
+    _lifetime: core::marker::PhantomData<fn() -> &'buf usize>,
 }
 
-impl Iterator for MemoryDescriptorIterator {
-    type Item = &'static EfiMemoryDescriptor;
+impl<'buf> Iterator for MemoryDescriptorIterator<'buf> {
+    type Item = &'buf EfiMemoryDescriptor;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.index += 1;

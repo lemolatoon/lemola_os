@@ -114,3 +114,14 @@ macro_rules! unwrap_success {
         }
     };
 }
+
+#[derive(Debug)]
+pub struct UnuseableBuffer<'a, T> {
+    buffer: &'a [T],
+}
+
+impl<'a, T> UnuseableBuffer<'a, T> {
+    pub fn new(buffer: &'a [T]) -> Self {
+        Self { buffer: &buffer }
+    }
+}

@@ -1,10 +1,12 @@
 use core::ffi::c_void;
 use core::fmt::Error;
+use core::slice::SliceIndex;
 
 use crate::dyn_utf16_ptr;
 use crate::guid::*;
 use crate::println;
 use crate::protocols::EfiGraphicsOutputProtocol;
+use crate::uefi_utils;
 use crate::uefi_utils::MemoryDescriptorArray;
 use crate::uefi_utils::MemoryMap;
 use crate::unwrap_success;
@@ -98,7 +100,7 @@ pub struct EfiBootServices {
         memory: *const u64,
     ) -> EfiStatus,
     free_pages: FnPtr,
-    pub get_memory_map: extern "efiapi" fn(
+    get_memory_map: extern "efiapi" fn(
         memory_map_size: &mut usize,
         memory_map: *mut EfiMemoryDescriptor,
         map_key: &mut usize,
@@ -247,6 +249,19 @@ impl EfiBootServices {
         Ok(status.try_into().unwrap())
     }
 
+    pub fn get_memory_map_key(&self) -> Result<usize, EfiStatusCode> {
+        todo!("this function is not working");
+        let mut map_key = 0;
+        let status: EfiStatusCode =
+            (self.get_memory_map)(&mut 0, core::ptr::null_mut(), &mut map_key, &mut 0, &mut 0)
+                .try_into()
+                .unwrap();
+
+        assert_eq!(status, EfiStatusCode::EfiBufferTooSmall);
+
+        Ok(map_key)
+    }
+
     pub fn allocate_pages(
         &self,
         type_: EfiAllocateType,
@@ -284,11 +299,16 @@ impl EfiBootServices {
         &self,
         image_handle: EfiHandle,
         map_key: usize,
-    ) -> Result<EfiStatusCode, Error> {
+    ) -> Result<(), EfiStatusCode> {
         let status = (self.exit_boot_services)(image_handle, map_key);
         let status: EfiStatusCode = status.try_into().unwrap();
-        assert!(status.is_success());
-        Ok(status)
+        if status.is_success() {
+            unsafe { uefi_utils::WRITER.output_protocol.set(None) };
+            Ok(())
+        } else {
+            println!("failed to exit boot services");
+            Err(status)
+        }
     }
 
     pub fn graphics_output_protocol(&self) -> &EfiGraphicsOutputProtocol {
